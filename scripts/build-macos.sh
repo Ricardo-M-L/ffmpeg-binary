@@ -257,6 +257,43 @@ else
     echo "    💡 安装 create-dmg 获得更好效果: brew install create-dmg"
 fi
 
+# 设置 DMG 文件图标
+echo "==> 设置 DMG 文件图标..."
+if [ -f "$ICON_FILE" ]; then
+    # 方法1: 使用 SetFile (需要 Xcode Command Line Tools)
+    if command -v SetFile &> /dev/null; then
+        # 创建临时的图标资源文件
+        TMP_ICON_DIR=$(mktemp -d)
+        TMP_ICON_FILE="$TMP_ICON_DIR/Icon\r"
+
+        # 将 .icns 转换为图标资源
+        sips -i "$ICON_FILE" > /dev/null 2>&1
+        DeRez -only icns "$ICON_FILE" > "$TMP_ICON_DIR/tmpicns.rsrc"
+        Rez -append "$TMP_ICON_DIR/tmpicns.rsrc" -o "$TMP_ICON_FILE"
+        SetFile -a C "$TMP_ICON_FILE"
+
+        # 复制图标资源到 DMG
+        cp "$TMP_ICON_FILE" "$DIST_DIR/"
+        SetFile -a C "$DIST_DIR/$DMG_NAME"
+
+        # 清理临时文件
+        rm -rf "$TMP_ICON_DIR"
+        echo "    ✅ DMG 文件图标已设置"
+    else
+        # 方法2: 使用 fileicon (可选安装)
+        if command -v fileicon &> /dev/null; then
+            fileicon set "$DIST_DIR/$DMG_NAME" "$ICON_FILE"
+            echo "    ✅ DMG 文件图标已设置 (使用 fileicon)"
+        else
+            echo "    ⚠️  无法设置 DMG 文件图标"
+            echo "    💡 安装 fileicon: brew install fileicon"
+            echo "    💡 或安装 Xcode Command Line Tools: xcode-select --install"
+        fi
+    fi
+else
+    echo "    ⚠️  图标文件不存在,无法设置 DMG 图标"
+fi
+
 echo ""
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║                 ✅ 打包完成!                                ║"
