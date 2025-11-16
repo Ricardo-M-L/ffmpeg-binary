@@ -4,7 +4,6 @@ import (
 	"ffmpeg-binary/internal/config"
 	"ffmpeg-binary/internal/converter"
 	"ffmpeg-binary/internal/task"
-	"ffmpeg-binary/internal/utils"
 	"fmt"
 	"log"
 	"net/http"
@@ -71,19 +70,8 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	// 选择可用端口
+	// 使用固定端口
 	port := s.config.Port
-	if port == 0 {
-		var err error
-		port, err = utils.FindAvailablePort(18888, 28888)
-		if err != nil {
-			return err
-		}
-		s.config.Port = port
-		// 保存配置
-		_ = s.config.Save()
-	}
-
 	addr := fmt.Sprintf("%s:%d", s.config.Host, port)
 	log.Printf("FFmpeg 服务启动成功: http://%s", addr)
 	log.Printf("数据目录: %s", s.config.DataDir)

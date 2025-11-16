@@ -17,7 +17,7 @@ type Config struct {
 // Load 加载配置
 func Load() (*Config, error) {
 	cfg := &Config{
-		Port:    0, // 0 表示自动选择端口
+		Port:    28888, // 固定端口 28888
 		Host:    "127.0.0.1",
 		DataDir: getDefaultDataDir(),
 	}

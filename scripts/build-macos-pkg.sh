@@ -176,7 +176,7 @@ cat > "$DIST_DIR/resources/welcome.html" << 'WELCOME'
     <div class="feature">✓ 异步分块上传转换</div>
     <div class="feature">✓ 任务状态查询</div>
     <div class="feature">✓ 本地服务 (127.0.0.1)</div>
-    <div class="feature">✓ 智能端口选择 (18888-28888)</div>
+    <div class="feature">✓ 智能端口选择 (28888)</div>
     <div class="feature">✓ 开机自动启动</div>
 
     <h3>系统要求:</h3>
@@ -206,8 +206,8 @@ cat > "$DIST_DIR/resources/conclusion.html" << 'CONCLUSION'
 
     <div class="info">
         <h3>服务信息:</h3>
-        <p>🌐 服务地址: <strong>http://127.0.0.1:18888</strong><br>
-           📊 健康检查: <strong>http://127.0.0.1:18888/health</strong><br>
+        <p>🌐 服务地址: <strong>http://127.0.0.1:28888</strong><br>
+           📊 健康检查: <strong>http://127.0.0.1:28888/health</strong><br>
            📁 日志文件: <strong>~/Library/Logs/ffmpeg-binary.log</strong></p>
     </div>
 

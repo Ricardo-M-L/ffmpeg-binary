@@ -8,7 +8,7 @@ brew install ffmpeg
 ```
 
 ### Windows
-1. 访问 https://www.gyan.dev/ffmpeg/builds/
+1. 访问
 2. 下载 "ffmpeg-release-essentials.zip"
 3. 解压到 `C:\ffmpeg\`
 4. 添加 `C:\ffmpeg\bin` 到系统 PATH
@@ -35,7 +35,7 @@ go build -o ffmpeg-binary
 # 运行
 ./ffmpeg-binary
 
-# 服务会自动选择可用端口(18888-28888)
+# 服务默认在端口 28888 运行
 # 查看输出确认端口号
 ```
 
@@ -43,8 +43,8 @@ go build -o ffmpeg-binary
 
 ### 健康检查
 ```bash
-curl http://127.0.0.1:18888/health
-# 预期输出: {"status":"ok","port":18888}
+curl http://127.0.0.1:28888/health
+# 预期输出: {"status":"ok","port":28888}
 ```
 
 ### 使用前端示例
@@ -69,7 +69,7 @@ open examples/demo.html
 
 ```bash
 # 假设你有一个 test.webm 文件
-curl -X POST http://127.0.0.1:18888/api/v1/convert/sync \
+curl -X POST http://127.0.0.1:28888/api/v1/convert/sync \
   -H "Content-Type: video/webm" \
   --data-binary @test.webm \
   -o output.mp4
@@ -83,7 +83,7 @@ const fileInput = document.querySelector('input[type="file"]');
 const file = fileInput.files[0];
 
 // 转换
-const response = await fetch('http://127.0.0.1:18888/api/v1/convert/sync', {
+const response = await fetch('http://127.0.0.1:28888/api/v1/convert/sync', {
   method: 'POST',
   headers: { 'Content-Type': 'video/webm' },
   body: file
@@ -103,7 +103,7 @@ document.body.appendChild(video);
 
 ```javascript
 // 1. 创建任务
-const createResp = await fetch('http://127.0.0.1:18888/api/v1/convert/async', {
+const createResp = await fetch('http://127.0.0.1:28888/api/v1/convert/async', {
   method: 'POST'
 });
 const { task_id, upload_url } = await createResp.json();
@@ -116,7 +116,7 @@ for (let i = 0; i < totalChunks; i++) {
   const chunk = file.slice(i * chunkSize, (i + 1) * chunkSize);
   const isLast = i === totalChunks - 1;
 
-  await fetch(`http://127.0.0.1:18888${upload_url}`, {
+  await fetch(`http://127.0.0.1:28888${upload_url}`, {
     method: 'POST',
     headers: { 'X-Last-Chunk': isLast ? 'true' : 'false' },
     body: chunk
@@ -129,7 +129,7 @@ for (let i = 0; i < totalChunks; i++) {
 while (true) {
   await new Promise(resolve => setTimeout(resolve, 1000));
 
-  const statusResp = await fetch(`http://127.0.0.1:18888/api/v1/task/${task_id}`);
+  const statusResp = await fetch(`http://127.0.0.1:28888/api/v1/task/${task_id}`);
   const status = await statusResp.json();
 
   console.log(`转换进度: ${status.progress}%`);
@@ -137,7 +137,7 @@ while (true) {
   if (status.status === 'completed') {
     // 4. 下载结果
     const downloadResp = await fetch(
-      `http://127.0.0.1:18888/api/v1/task/${task_id}/download`
+      `http://127.0.0.1:28888/api/v1/task/${task_id}/download`
     );
     const mp4Blob = await downloadResp.blob();
 
@@ -183,10 +183,10 @@ ffmpeg -version
 **检查端口占用**:
 ```bash
 # macOS/Linux
-lsof -i :18888
+lsof -i :28888
 
 # Windows
-netstat -ano | findstr :18888
+netstat -ano | findstr :28888
 ```
 
 ### 问题: 转换失败
@@ -198,7 +198,7 @@ netstat -ano | findstr :18888
 ### 问题: 前端跨域错误
 
 服务已启用 CORS,如果仍有问题:
-1. 确认服务地址为 `http://127.0.0.1:18888`
+1. 确认服务地址为 `http://127.0.0.1:28888`
 2. 不要使用 `localhost`,使用 `127.0.0.1`
 
 ## 📚 更多信息

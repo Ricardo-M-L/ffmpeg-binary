@@ -6,7 +6,7 @@
 
 - ✅ **同步转换**: 直接接收 WebM 流,实时返回 MP4 流
 - ✅ **异步转换**: 分片上传大文件,后台处理,支持进度查询
-- ✅ **智能端口**: 自动选择 18888-28888 范围内的可用端口
+- ✅ **固定端口**: 使用固定端口 28888
 - ✅ **开机自启**: 支持 macOS/Windows/Linux 自启动
 - ✅ **本地服务**: 仅监听 127.0.0.1,安全可靠
 
@@ -69,7 +69,7 @@ build-windows.bat
 
 **示例**:
 ```bash
-curl -X POST http://127.0.0.1:18888/api/v1/convert/sync \
+curl -X POST http://127.0.0.1:28888/api/v1/convert/sync \
   -H "Content-Type: video/webm" \
   --data-binary @input.webm \
   -o output.mp4
@@ -77,7 +77,7 @@ curl -X POST http://127.0.0.1:18888/api/v1/convert/sync \
 
 **前端示例**:
 ```javascript
-const response = await fetch('http://127.0.0.1:18888/api/v1/convert/sync', {
+const response = await fetch('http://127.0.0.1:28888/api/v1/convert/sync', {
   method: 'POST',
   headers: {
     'Content-Type': 'video/webm'
@@ -133,7 +133,7 @@ const mp4Blob = await response.blob();
 **前端分片上传示例**:
 ```javascript
 // 创建任务
-const createResp = await fetch('http://127.0.0.1:18888/api/v1/convert/async', {
+const createResp = await fetch('http://127.0.0.1:28888/api/v1/convert/async', {
   method: 'POST'
 });
 const { task_id, upload_url } = await createResp.json();
@@ -148,7 +148,7 @@ for (let i = 0; i < totalChunks; i++) {
   const chunk = file.slice(start, end);
   const isLast = i === totalChunks - 1;
 
-  await fetch(`http://127.0.0.1:18888${upload_url}`, {
+  await fetch(`http://127.0.0.1:28888${upload_url}`, {
     method: 'POST',
     headers: {
       'X-Last-Chunk': isLast ? 'true' : 'false'
@@ -188,7 +188,7 @@ for (let i = 0; i < totalChunks; i++) {
 ```javascript
 async function pollTaskStatus(taskId) {
   const checkStatus = async () => {
-    const resp = await fetch(`http://127.0.0.1:18888/api/v1/task/${taskId}`);
+    const resp = await fetch(`http://127.0.0.1:28888/api/v1/task/${taskId}`);
     const data = await resp.json();
 
     console.log(`进度: ${data.progress}%`);
@@ -222,12 +222,12 @@ async function pollTaskStatus(taskId) {
 
 **示例**:
 ```bash
-curl -o output.mp4 http://127.0.0.1:18888/api/v1/task/550e8400-e29b-41d4-a716-446655440000/download
+curl -o output.mp4 http://127.0.0.1:28888/api/v1/task/550e8400-e29b-41d4-a716-446655440000/download
 ```
 
 **前端下载示例**:
 ```javascript
-const resp = await fetch(`http://127.0.0.1:18888/api/v1/task/${taskId}/download`);
+const resp = await fetch(`http://127.0.0.1:28888/api/v1/task/${taskId}/download`);
 const blob = await resp.blob();
 const url = URL.createObjectURL(blob);
 
@@ -289,7 +289,7 @@ a.click();
 ```json
 {
   "status": "ok",
-  "port": 18888
+  "port": 28888
 }
 ```
 
@@ -297,7 +297,7 @@ a.click();
 
 ```javascript
 class FFmpegConverter {
-  constructor(baseUrl = 'http://127.0.0.1:18888') {
+  constructor(baseUrl = 'http://127.0.0.1:28888') {
     this.baseUrl = baseUrl;
   }
 
@@ -376,7 +376,7 @@ const mp4Blob = await converter.convertAsync(file, ({ progress, status }) => {
 
 ```json
 {
-  "port": 18888,
+  "port": 28888,
   "host": "127.0.0.1",
   "data_dir": "~/.ffmpeg-binary/data",
   "ffmpeg_path": "/usr/local/bin/ffmpeg"

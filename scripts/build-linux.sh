@@ -80,7 +80,7 @@ else
 fi
 
 echo "FFmpeg Binary 服务已安装并启动"
-echo "服务地址: http://127.0.0.1:18888 (端口可能不同,请查看日志)"
+echo "服务地址: http://127.0.0.1:28888 (端口可能不同,请查看日志)"
 
 exit 0
 EOF
@@ -126,7 +126,7 @@ FFmpeg Binary Service
 This service provides WebM to MP4 video conversion.
 
 Usage:
-  The service runs automatically after installation on port 18888-28888.
+  The service runs automatically after installation on port 28888.
 
   API Documentation:
   - POST /api/v1/convert/sync - Synchronous conversion
@@ -259,7 +259,7 @@ echo "║                 ✅ 安装成功!                                ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 echo "服务已启动并设置为开机自启"
-echo "默认端口: 18888-28888"
+echo "默认端口: 28888"
 echo ""
 echo "查看日志: ~/.ffmpeg-binary/"
 echo ""
