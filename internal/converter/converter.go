@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 )
 
@@ -34,9 +33,28 @@ func (c *Converter) ConvertStream(ctx context.Context, input io.Reader, output i
 
 	cmd.Stdin = input
 	cmd.Stdout = output
-	cmd.Stderr = os.Stderr
 
-	return cmd.Run()
+	// 捕获 stderr 以便记录详细错误信息
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("创建 stderr 管道失败: %v", err)
+	}
+
+	// 启动命令
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("启动 FFmpeg 失败: %v", err)
+	}
+
+	// 读取 stderr 输出
+	stderrBytes, _ := io.ReadAll(stderrPipe)
+
+	// 等待命令完成
+	if err := cmd.Wait(); err != nil {
+		// 返回详细的错误信息,包含 FFmpeg 的 stderr 输出
+		return fmt.Errorf("FFmpeg 转换失败: %v\nFFmpeg 输出:\n%s", err, string(stderrBytes))
+	}
+
+	return nil
 }
 
 // ConvertFile 异步转换视频文件 (WebM -> MP4)

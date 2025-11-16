@@ -17,7 +17,16 @@ import (
 // POST /api/v1/convert/sync
 // 直接接收 WebM 流,返回 MP4 流
 func (s *Server) handleSyncConvert(c *gin.Context) {
-	// 设置响应头
+	// 检查请求体是否为空
+	if c.Request.ContentLength == 0 {
+		log.Printf("同步转换失败: 请求体为空")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求体不能为空,请上传 WebM 视频文件"})
+		return
+	}
+
+	log.Printf("开始同步转换,内容长度: %d 字节", c.Request.ContentLength)
+
+	// 设置响应头(在确认有数据后再设置)
 	c.Header("Content-Type", "video/mp4")
 	c.Header("Transfer-Encoding", "chunked")
 
@@ -25,9 +34,12 @@ func (s *Server) handleSyncConvert(c *gin.Context) {
 	// 直接将转换后的 MP4 流写入响应
 	if err := s.converter.ConvertStream(c.Request.Context(), c.Request.Body, c.Writer); err != nil {
 		log.Printf("同步转换失败: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// 注意:此时响应头已发送,无法返回 JSON 错误
+		// 只能记录日志,客户端会收到不完整的响应
 		return
 	}
+
+	log.Printf("同步转换完成")
 }
 
 // handleAsyncConvert 创建异步转换任务
