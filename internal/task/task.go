@@ -21,16 +21,20 @@ const (
 
 // Task 转换任务
 type Task struct {
-	ID         string    `json:"id"`
-	Status     Status    `json:"status"`
-	Progress   int       `json:"progress"`    // 进度 0-100
-	InputPath  string    `json:"input_path"`  // 输入文件路径
-	OutputPath string    `json:"output_path"` // 输出文件路径
-	Error      string    `json:"error,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
-	ctx        context.Context
-	cancel     context.CancelFunc
+	ID           string     `json:"taskId"`                // 任务ID
+	Status       Status     `json:"status"`                // 状态
+	Progress     int        `json:"progress"`              // 进度 0-100
+	InputPath    string     `json:"inputPath"`             // 输入文件路径
+	OutputPath   string     `json:"outputPath"`            // 输出文件路径
+	OutputFormat string     `json:"outputFormat"`          // 输出格式
+	Quality      string     `json:"quality"`               // 质量
+	UploadID     string     `json:"uploadId,omitempty"`    // 关联的上传ID
+	Error        string     `json:"error,omitempty"`       // 错误信息
+	CreatedAt    time.Time  `json:"createdAt"`             // 创建时间
+	UpdatedAt    time.Time  `json:"updatedAt"`             // 更新时间
+	CompletedAt  *time.Time `json:"completedAt,omitempty"` // 完成时间
+	ctx          context.Context
+	cancel       context.CancelFunc
 }
 
 // Manager 任务管理器
@@ -48,25 +52,51 @@ func NewManager() *Manager {
 
 // Create 创建新任务
 func (m *Manager) Create(inputPath, outputPath string) *Task {
+	return m.CreateWithOptions(inputPath, outputPath, "mp4", "medium", "")
+}
+
+// CreateWithOptions 创建新任务(带完整选项)
+func (m *Manager) CreateWithOptions(inputPath, outputPath, outputFormat, quality, uploadID string) *Task {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	task := &Task{
-		ID:         uuid.New().String(),
-		Status:     StatusPending,
-		Progress:   0,
-		InputPath:  inputPath,
-		OutputPath: outputPath,
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
-		ctx:        ctx,
-		cancel:     cancel,
+		ID:           uuid.New().String(),
+		Status:       StatusPending,
+		Progress:     0,
+		InputPath:    inputPath,
+		OutputPath:   outputPath,
+		OutputFormat: outputFormat,
+		Quality:      quality,
+		UploadID:     uploadID,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 
 	m.tasks[task.ID] = task
 	return task
+}
+
+// MarkCompleted 标记任务完成
+func (m *Manager) MarkCompleted(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	task, ok := m.tasks[id]
+	if !ok {
+		return fmt.Errorf("任务不存在: %s", id)
+	}
+
+	now := time.Now()
+	task.Status = StatusCompleted
+	task.Progress = 100
+	task.CompletedAt = &now
+	task.UpdatedAt = now
+	return nil
 }
 
 // Get 获取任务

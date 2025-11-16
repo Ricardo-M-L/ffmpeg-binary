@@ -4,6 +4,7 @@ import (
 	"ffmpeg-binary/internal/config"
 	"ffmpeg-binary/internal/converter"
 	"ffmpeg-binary/internal/task"
+	"ffmpeg-binary/internal/upload"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,6 +18,7 @@ type Server struct {
 	config    *config.Config
 	converter *converter.Converter
 	taskMgr   *task.Manager
+	uploadMgr *upload.Manager
 	router    *gin.Engine
 }
 
@@ -28,6 +30,7 @@ func New(cfg *config.Config) *Server {
 		config:    cfg,
 		converter: converter.New(cfg.FFmpegPath),
 		taskMgr:   task.NewManager(),
+		uploadMgr: upload.NewManager(cfg.TempDir, cfg.DataDir),
 		router:    gin.Default(),
 	}
 
@@ -35,32 +38,52 @@ func New(cfg *config.Config) *Server {
 	return s
 }
 
-// setupRoutes 设置路由
+// setupRoutes 设置路由(完全兼容 video-service)
 func (s *Server) setupRoutes() {
 	// CORS 中间件
 	s.router.Use(corsMiddleware())
 
-	// API 路由
-	api := s.router.Group("/api/v1")
+	// API 路由组
+	api := s.router.Group("/api")
 	{
-		// 同步转换接口
-		api.POST("/convert/sync", s.handleSyncConvert)
+		// 上传模块
+		upload := api.Group("/upload")
+		{
+			upload.POST("/init", s.handleUploadInit)
+			upload.POST("/chunk", s.handleUploadChunk)
+			upload.GET("/status/:uploadId", s.handleUploadStatus)
+			upload.POST("/cancel/:uploadId", s.handleUploadCancel)
+		}
 
-		// 异步转换接口
-		api.POST("/convert/async", s.handleAsyncConvert)
-		api.POST("/convert/async/:task_id/chunk", s.handleUploadChunk)
+		// 转换模块
+		convert := api.Group("/convert")
+		{
+			convert.POST("/start", s.handleConvertStart)
+			convert.GET("/status/:taskId", s.handleConvertStatus)
+			convert.POST("/cancel/:taskId", s.handleConvertCancel)
+			convert.GET("/list", s.handleConvertList)
+			convert.GET("/download/:taskId", s.handleConvertDownload)
+		}
 
-		// 任务管理接口
-		api.GET("/task/:task_id", s.handleGetTask)
-		api.GET("/task/:task_id/download", s.handleDownloadVideo)
-		api.DELETE("/task/:task_id", s.handleDeleteTask)
-		api.GET("/tasks", s.handleListTasks)
+		// 进度查询模块
+		progress := api.Group("/progress")
+		{
+			progress.GET("/:id", s.handleProgress)
+		}
 	}
 
 	// 健康检查
 	s.router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok", "port": s.config.Port})
+		c.JSON(200, gin.H{
+			"status":    "ok",
+			"timestamp": time.Now().Format(time.RFC3339),
+			"service":   "ffmpeg-binary",
+			"version":   "1.0.0",
+		})
 	})
+
+	// 静态文件服务(下载输出文件)
+	s.router.Static("/downloads", s.config.OutputDir)
 }
 
 // Start 启动服务器
@@ -73,8 +96,16 @@ func (s *Server) Start() error {
 	// 使用固定端口
 	port := s.config.Port
 	addr := fmt.Sprintf("%s:%d", s.config.Host, port)
-	log.Printf("FFmpeg 服务启动成功: http://%s", addr)
-	log.Printf("数据目录: %s", s.config.DataDir)
+
+	log.Println("\n===========================================")
+	log.Println("🚀 FFmpeg Binary 服务启动成功!")
+	log.Println("===========================================")
+	log.Printf("📡 服务地址: http://%s", addr)
+	log.Printf("📝 健康检查: http://%s/health", addr)
+	log.Printf("📂 数据目录: %s", s.config.DataDir)
+	log.Printf("📂 临时目录: %s", s.config.TempDir)
+	log.Printf("📂 输出目录: %s", s.config.OutputDir)
+	log.Println("===========================================\n")
 
 	// 启动 HTTP 服务
 	srv := &http.Server{

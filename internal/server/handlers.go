@@ -7,112 +7,469 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"time"
 
 	"ffmpeg-binary/internal/task"
+	"ffmpeg-binary/internal/upload"
 
 	"github.com/gin-gonic/gin"
 )
 
-// handleSyncConvert 同步转换接口
-// POST /api/v1/convert/sync
-// 直接接收 WebM 流,返回 MP4 流
-func (s *Server) handleSyncConvert(c *gin.Context) {
-	// 检查请求体是否为空
-	if c.Request.ContentLength == 0 {
-		log.Printf("同步转换失败: 请求体为空")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请求体不能为空,请上传 WebM 视频文件"})
+// ==================== 上传模块 ====================
+
+// handleUploadInit 初始化上传任务
+// POST /api/upload/init
+func (s *Server) handleUploadInit(c *gin.Context) {
+	var req struct {
+		FileName    string `json:"fileName" binding:"required"`
+		FileSize    int64  `json:"fileSize" binding:"required"`
+		TotalChunks int    `json:"totalChunks" binding:"required"`
+		ChunkSize   int64  `json:"chunkSize"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "缺少必要参数: fileName, fileSize, totalChunks",
+		})
 		return
 	}
 
-	log.Printf("开始同步转换,内容长度: %d 字节", c.Request.ContentLength)
-
-	// 设置响应头(在确认有数据后再设置)
-	c.Header("Content-Type", "video/mp4")
-	c.Header("Transfer-Encoding", "chunked")
-
-	// 从请求体读取 WebM 流
-	// 直接将转换后的 MP4 流写入响应
-	if err := s.converter.ConvertStream(c.Request.Context(), c.Request.Body, c.Writer); err != nil {
-		log.Printf("同步转换失败: %v", err)
-		// 注意:此时响应头已发送,无法返回 JSON 错误
-		// 只能记录日志,客户端会收到不完整的响应
-		return
-	}
-
-	log.Printf("同步转换完成")
-}
-
-// handleAsyncConvert 创建异步转换任务
-// POST /api/v1/convert/async
-// 返回任务 ID,准备接收分片上传
-func (s *Server) handleAsyncConvert(c *gin.Context) {
-	// 创建临时文件存储上传的 WebM
-	inputPath := filepath.Join(s.config.DataDir, fmt.Sprintf("input_%d.webm", os.Getpid()))
-	outputPath := filepath.Join(s.config.DataDir, fmt.Sprintf("output_%d.mp4", os.Getpid()))
-
-	// 创建任务
-	t := s.taskMgr.Create(inputPath, outputPath)
-
-	// 创建输入文件
-	if _, err := os.Create(inputPath); err != nil {
-		s.taskMgr.UpdateError(t.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	uploadTask, err := s.uploadMgr.CreateUploadTask(req.FileName, req.FileSize, req.TotalChunks, req.ChunkSize)
+	if err != nil {
+		log.Printf("创建上传任务失败: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "创建上传任务失败",
+			"error":   err.Error(),
+		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"task_id":      t.ID,
-		"status":       t.Status,
-		"message":      "任务已创建,请上传视频分片",
-		"upload_url":   fmt.Sprintf("/api/v1/convert/async/%s/chunk", t.ID),
-		"status_url":   fmt.Sprintf("/api/v1/task/%s", t.ID),
-		"download_url": fmt.Sprintf("/api/v1/task/%s/download", t.ID),
+		"success": true,
+		"message": "上传任务初始化成功",
+		"data": gin.H{
+			"uploadId":    uploadTask.UploadID,
+			"fileName":    uploadTask.FileName,
+			"totalChunks": uploadTask.TotalChunks,
+		},
 	})
 }
 
-// handleUploadChunk 上传视频分片
-// POST /api/v1/convert/async/:task_id/chunk
+// handleUploadChunk 上传文件切片
+// POST /api/upload/chunk
 func (s *Server) handleUploadChunk(c *gin.Context) {
-	taskID := c.Param("task_id")
+	// 获取表单参数
+	uploadID := c.PostForm("uploadId")
+	chunkIndexStr := c.PostForm("chunkIndex")
 
-	t, err := s.taskMgr.Get(taskID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	if uploadID == "" || chunkIndexStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "缺少必要参数: uploadId, chunkIndex, file",
+		})
 		return
 	}
 
-	// 打开输入文件(追加模式)
-	file, err := os.OpenFile(t.InputPath, os.O_APPEND|os.O_WRONLY, 0644)
+	chunkIndex, err := strconv.Atoi(chunkIndexStr)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "chunkIndex 必须是数字",
+		})
+		return
+	}
+
+	// 获取上传任务
+	uploadTask, err := s.uploadMgr.GetUploadTask(uploadID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// 获取文件
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "缺少文件",
+		})
+		return
+	}
+
+	// 保存切片
+	chunkPath := uploadTask.GetChunkPath(chunkIndex)
+	if err := c.SaveUploadedFile(file, chunkPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "保存切片失败",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// 记录切片上传
+	if err := s.uploadMgr.RecordChunk(uploadID, chunkIndex); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "记录切片失败",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// 刷新任务状态
+	uploadTask, _ = s.uploadMgr.GetUploadTask(uploadID)
+	isComplete := uploadTask.IsComplete()
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "切片上传成功",
+		"data": gin.H{
+			"uploadId":       uploadID,
+			"chunkIndex":     chunkIndex,
+			"uploadedChunks": uploadTask.UploadedChunks,
+			"totalChunks":    uploadTask.TotalChunks,
+			"isComplete":     isComplete,
+		},
+	})
+
+	// 如果所有切片都已上传,开始合并
+	if isComplete {
+		log.Printf("所有切片上传完成,开始合并文件: %s", uploadID)
+		go func() {
+			if err := s.uploadMgr.MergeChunks(uploadID); err != nil {
+				log.Printf("合并切片失败: %v", err)
+			} else {
+				log.Printf("文件合并完成: %s", uploadID)
+			}
+		}()
+	}
+}
+
+// handleUploadStatus 查询上传状态
+// GET /api/upload/status/:uploadId
+func (s *Server) handleUploadStatus(c *gin.Context) {
+	uploadID := c.Param("uploadId")
+
+	uploadTask, err := s.uploadMgr.GetUploadTask(uploadID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "上传任务不存在",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    uploadTask,
+	})
+}
+
+// handleUploadCancel 取消上传任务
+// POST /api/upload/cancel/:uploadId
+func (s *Server) handleUploadCancel(c *gin.Context) {
+	uploadID := c.Param("uploadId")
+
+	if err := s.uploadMgr.CancelUpload(uploadID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "取消上传任务失败",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "上传任务已取消",
+	})
+}
+
+// ==================== 转换模块 ====================
+
+// handleConvertStart 开始视频转换任务
+// POST /api/convert/start
+func (s *Server) handleConvertStart(c *gin.Context) {
+	var req struct {
+		UploadID     string                 `json:"uploadId"`
+		FilePath     string                 `json:"filePath"`
+		OutputFormat string                 `json:"outputFormat"`
+		Quality      string                 `json:"quality"`
+		Options      map[string]interface{} `json:"options"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "请求参数错误",
+		})
+		return
+	}
+
+	// 验证输入源
+	if req.UploadID == "" && req.FilePath == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "必须提供uploadId或filePath",
+		})
+		return
+	}
+
+	// 获取输入文件路径
+	var inputPath string
+	if req.UploadID != "" {
+		uploadTask, err := s.uploadMgr.GetUploadTask(req.UploadID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"message": "上传任务不存在",
+			})
+			return
+		}
+
+		if uploadTask.Status != upload.UploadStatusMerged {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": fmt.Sprintf("文件尚未合并完成,当前状态: %s", uploadTask.Status),
+			})
+			return
+		}
+
+		inputPath = uploadTask.MergedPath
+	} else {
+		inputPath = req.FilePath
+	}
+
+	// 检查输入文件是否存在
+	if _, err := os.Stat(inputPath); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "输入文件不存在",
+		})
+		return
+	}
+
+	// 设置默认值
+	if req.OutputFormat == "" {
+		req.OutputFormat = "mp4"
+	}
+	if req.Quality == "" {
+		req.Quality = "medium"
+	}
+
+	// 生成输出文件路径
+	outputPath := filepath.Join(s.config.OutputDir, fmt.Sprintf("%s.%s", generateTaskID(), req.OutputFormat))
+
+	// 创建转换任务
+	convertTask := s.taskMgr.CreateWithOptions(inputPath, outputPath, req.OutputFormat, req.Quality, req.UploadID)
+
+	// 异步执行转换
+	go s.processConvertTask(convertTask)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "转换任务已启动",
+		"data": gin.H{
+			"taskId":       convertTask.ID,
+			"inputPath":    inputPath,
+			"outputFormat": req.OutputFormat,
+			"quality":      req.Quality,
+		},
+	})
+}
+
+// handleConvertStatus 查询转换状态
+// GET /api/convert/status/:taskId
+func (s *Server) handleConvertStatus(c *gin.Context) {
+	taskID := c.Param("taskId")
+
+	convertTask, err := s.taskMgr.Get(taskID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "转换任务不存在",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    convertTask,
+	})
+}
+
+// handleConvertCancel 取消转换任务
+// POST /api/convert/cancel/:taskId
+func (s *Server) handleConvertCancel(c *gin.Context) {
+	taskID := c.Param("taskId")
+
+	if err := s.taskMgr.Delete(taskID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "取消转换任务失败",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "转换任务已取消",
+	})
+}
+
+// handleConvertList 获取转换任务列表
+// GET /api/convert/list
+func (s *Server) handleConvertList(c *gin.Context) {
+	statusFilter := c.Query("status")
+	limitStr := c.DefaultQuery("limit", "50")
+	limit, _ := strconv.Atoi(limitStr)
+
+	tasks := s.taskMgr.List()
+
+	// 过滤
+	var filtered []*task.Task
+	for _, t := range tasks {
+		if statusFilter == "" || string(t.Status) == statusFilter {
+			filtered = append(filtered, t)
+		}
+	}
+
+	// 限制数量
+	if len(filtered) > limit {
+		filtered = filtered[:limit]
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"tasks": filtered,
+			"total": len(filtered),
+		},
+	})
+}
+
+// handleConvertDownload 下载转换后的文件
+// GET /api/convert/download/:taskId
+func (s *Server) handleConvertDownload(c *gin.Context) {
+	taskID := c.Param("taskId")
+
+	convertTask, err := s.taskMgr.Get(taskID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "转换任务不存在",
+		})
+		return
+	}
+
+	if convertTask.Status != task.StatusCompleted {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": fmt.Sprintf("文件尚未转换完成,当前状态: %s", convertTask.Status),
+		})
+		return
+	}
+
+	if _, err := os.Stat(convertTask.OutputPath); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "输出文件不存在",
+		})
+		return
+	}
+
+	// 设置响应头
+	fileName := filepath.Base(convertTask.OutputPath)
+	c.Header("Content-Type", "video/mp4")
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, fileName))
+
+	// 流式传输文件
+	file, err := os.Open(convertTask.OutputPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "打开文件失败",
+		})
 		return
 	}
 	defer file.Close()
 
-	// 写入分片数据
-	written, err := io.Copy(file, c.Request.Body)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	io.Copy(c.Writer, file)
+}
+
+// ==================== 进度查询模块 ====================
+
+// handleProgress 统一进度查询
+// GET /api/progress/:id
+func (s *Server) handleProgress(c *gin.Context) {
+	id := c.Param("id")
+
+	// 首先尝试作为上传任务查询
+	if uploadTask, err := s.uploadMgr.GetUploadTask(id); err == nil {
+		progress := 0.0
+		if uploadTask.TotalChunks > 0 {
+			progress = float64(uploadTask.UploadedChunks) / float64(uploadTask.TotalChunks) * 100
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data": gin.H{
+				"type":           "upload",
+				"taskId":         id,
+				"status":         uploadTask.Status,
+				"progress":       int(progress),
+				"uploadedChunks": uploadTask.UploadedChunks,
+				"totalChunks":    uploadTask.TotalChunks,
+				"fileName":       uploadTask.FileName,
+				"fileSize":       uploadTask.FileSize,
+				"createdAt":      uploadTask.CreatedAt,
+				"updatedAt":      uploadTask.UpdatedAt,
+			},
+		})
 		return
 	}
 
-	// 检查是否是最后一个分片
-	isLast := c.GetHeader("X-Last-Chunk") == "true"
-
-	c.JSON(http.StatusOK, gin.H{
-		"task_id": taskID,
-		"written": written,
-		"is_last": isLast,
-	})
-
-	// 如果是最后一个分片,开始转换
-	if isLast {
-		go s.processTask(t)
+	// 尝试作为转换任务查询
+	if convertTask, err := s.taskMgr.Get(id); err == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data": gin.H{
+				"type":         "convert",
+				"taskId":       id,
+				"status":       convertTask.Status,
+				"progress":     convertTask.Progress,
+				"inputPath":    convertTask.InputPath,
+				"outputPath":   convertTask.OutputPath,
+				"outputFormat": convertTask.OutputFormat,
+				"quality":      convertTask.Quality,
+				"error":        convertTask.Error,
+				"createdAt":    convertTask.CreatedAt,
+				"updatedAt":    convertTask.UpdatedAt,
+				"completedAt":  convertTask.CompletedAt,
+			},
+		})
+		return
 	}
+
+	// 任务不存在
+	c.JSON(http.StatusNotFound, gin.H{
+		"success": false,
+		"message": "任务不存在",
+	})
 }
 
-// processTask 处理转换任务
-func (s *Server) processTask(t *task.Task) {
+// ==================== 辅助函数 ====================
+
+// processConvertTask 处理转换任务
+func (s *Server) processConvertTask(t *task.Task) {
 	// 更新状态为处理中
 	s.taskMgr.UpdateStatus(t.ID, task.StatusProcessing, 0)
 
@@ -129,11 +486,13 @@ func (s *Server) processTask(t *task.Task) {
 		}
 
 		// 转换完成
-		s.taskMgr.UpdateStatus(t.ID, task.StatusCompleted, 100)
+		s.taskMgr.MarkCompleted(t.ID)
 		log.Printf("任务 %s 转换完成", t.ID)
 
-		// 删除输入文件
-		os.Remove(t.InputPath)
+		// 删除输入文件(如果是上传的临时文件)
+		if t.UploadID != "" {
+			os.Remove(t.InputPath)
+		}
 	}()
 
 	// 更新进度
@@ -147,98 +506,12 @@ func (s *Server) processTask(t *task.Task) {
 	}
 }
 
-// handleGetTask 查询任务状态
-// GET /api/v1/task/:task_id
-func (s *Server) handleGetTask(c *gin.Context) {
-	taskID := c.Param("task_id")
-
-	t, err := s.taskMgr.Get(taskID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"id":         t.ID,
-		"status":     t.Status,
-		"progress":   t.Progress,
-		"error":      t.Error,
-		"created_at": t.CreatedAt,
-		"updated_at": t.UpdatedAt,
-	})
+// generateTaskID 生成任务ID
+func generateTaskID() string {
+	return fmt.Sprintf("task_%d", timeNow().UnixNano())
 }
 
-// handleDownloadVideo 下载转换后的视频
-// GET /api/v1/task/:task_id/download
-func (s *Server) handleDownloadVideo(c *gin.Context) {
-	taskID := c.Param("task_id")
-
-	t, err := s.taskMgr.Get(taskID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-
-	// 检查任务状态
-	if t.Status != task.StatusCompleted {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":    "任务未完成",
-			"status":   t.Status,
-			"progress": t.Progress,
-		})
-		return
-	}
-
-	// 检查输出文件是否存在
-	if _, err := os.Stat(t.OutputPath); os.IsNotExist(err) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "视频文件不存在"})
-		return
-	}
-
-	// 返回文件
-	c.Header("Content-Type", "video/mp4")
-	c.File(t.OutputPath)
-}
-
-// handleDeleteTask 删除任务
-// DELETE /api/v1/task/:task_id
-func (s *Server) handleDeleteTask(c *gin.Context) {
-	taskID := c.Param("task_id")
-
-	t, err := s.taskMgr.Get(taskID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-
-	// 删除文件
-	os.Remove(t.InputPath)
-	os.Remove(t.OutputPath)
-
-	// 删除任务
-	s.taskMgr.Delete(taskID)
-
-	c.JSON(http.StatusOK, gin.H{"message": "任务已删除"})
-}
-
-// handleListTasks 列出所有任务
-// GET /api/v1/tasks
-func (s *Server) handleListTasks(c *gin.Context) {
-	tasks := s.taskMgr.List()
-
-	result := make([]gin.H, len(tasks))
-	for i, t := range tasks {
-		result[i] = gin.H{
-			"id":         t.ID,
-			"status":     t.Status,
-			"progress":   t.Progress,
-			"created_at": t.CreatedAt,
-			"updated_at": t.UpdatedAt,
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"tasks": result,
-		"total": len(tasks),
-	})
+// timeNow 获取当前时间(便于测试)
+var timeNow = func() time.Time {
+	return time.Now()
 }

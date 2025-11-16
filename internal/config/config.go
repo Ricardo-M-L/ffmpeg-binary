@@ -11,15 +11,21 @@ type Config struct {
 	Port       int    `json:"port"`        // 服务端口
 	Host       string `json:"host"`        // 服务地址
 	DataDir    string `json:"data_dir"`    // 数据存储目录
+	TempDir    string `json:"temp_dir"`    // 临时文件目录
+	OutputDir  string `json:"output_dir"`  // 输出文件目录
 	FFmpegPath string `json:"ffmpeg_path"` // FFmpeg 可执行文件路径
 }
 
 // Load 加载配置
 func Load() (*Config, error) {
+	baseDir := getBaseDir()
+
 	cfg := &Config{
-		Port:    28888, // 固定端口 28888
-		Host:    "127.0.0.1",
-		DataDir: getDefaultDataDir(),
+		Port:      28888, // 固定端口 28888
+		Host:      "127.0.0.1",
+		DataDir:   filepath.Join(baseDir, "data"),
+		TempDir:   filepath.Join(baseDir, "temp"),
+		OutputDir: filepath.Join(baseDir, "output"),
 	}
 
 	// 尝试从配置文件加载
@@ -28,15 +34,24 @@ func Load() (*Config, error) {
 		_ = json.Unmarshal(data, cfg)
 	}
 
-	// 确保数据目录存在
-	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
-		return nil, err
+	// 确保所有目录存在
+	dirs := []string{cfg.DataDir, cfg.TempDir, cfg.OutputDir}
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, err
+		}
 	}
 
 	// 查找 FFmpeg
 	cfg.FFmpegPath = findFFmpeg()
 
 	return cfg, nil
+}
+
+// getBaseDir 获取基础目录
+func getBaseDir() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".ffmpeg-binary")
 }
 
 // Save 保存配置

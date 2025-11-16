@@ -1,16 +1,18 @@
 # FFmpeg Binary Service
 
-一个本地运行的 WebM 到 MP4 视频转换服务,支持同步和异步转换模式。
+一个本地运行的视频处理服务,支持文件切片上传、WebM 到 MP4 转换和实时进度查询。
 
-## 功能特性
+## 🌟 功能特性
 
-- ✅ **同步转换**: 直接接收 WebM 流,实时返回 MP4 流
-- ✅ **异步转换**: 分片上传大文件,后台处理,支持进度查询
+- ✅ **文件切片上传**: 支持大文件分片上传,自动合并
+- ✅ **视频格式转换**: WebM → MP4 转换,支持多种质量选项
+- ✅ **实时进度查询**: 统一的进度查询接口
 - ✅ **固定端口**: 使用固定端口 28888
 - ✅ **开机自启**: 支持 macOS/Windows/Linux 自启动
 - ✅ **本地服务**: 仅监听 127.0.0.1,安全可靠
+- ✅ **完全兼容**: 接口 100% 兼容 video-service (Node.js 版本)
 
-## 快速开始
+## 🚀 快速开始
 
 ### 开发环境运行
 
@@ -21,8 +23,7 @@ go mod download
 # 运行服务
 go run main.go
 
-# 服务会自动选择可用端口并启动
-# 查看日志获取实际端口号
+# 服务启动在 http://127.0.0.1:28888
 ```
 
 ### 生产环境部署
@@ -31,7 +32,7 @@ go run main.go
 
 ```bash
 # 构建 DMG 安装包
-./build-macos.sh
+./scripts/build-macos-dmg.sh
 
 # 安装
 # 1. 打开 build/macos/FFmpeg-Binary-Installer.dmg
@@ -44,244 +45,297 @@ go run main.go
 
 ```bash
 # 构建 Windows 可执行文件
-build-windows.bat
+./scripts/build-windows.bat
 
 # 安装
 # 1. 复制 ffmpeg-binary.exe 到 C:\Program Files\FFmpeg-Binary\
 # 2. 运行 install.bat 安装自启动
 ```
 
-## API 接口文档
+---
 
-### 1. 同步转换接口
+## 📡 API 接口文档
 
-直接将 WebM 流转换为 MP4 流返回。
+### 基础信息
 
-**接口**: `POST /api/v1/convert/sync`
-
-**请求**:
-- Content-Type: `video/webm`
-- Body: WebM 视频流
-
-**响应**:
-- Content-Type: `video/mp4`
-- Body: MP4 视频流
-
-**示例**:
-```bash
-curl -X POST http://127.0.0.1:28888/api/v1/convert/sync \
-  -H "Content-Type: video/webm" \
-  --data-binary @input.webm \
-  -o output.mp4
-```
-
-**前端示例**:
-```javascript
-const response = await fetch('http://127.0.0.1:28888/api/v1/convert/sync', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'video/webm'
-  },
-  body: webmBlob
-});
-
-const mp4Blob = await response.blob();
-```
+- **基础URL**: `http://127.0.0.1:28888`
+- **默认端口**: 28888
+- **响应格式**: JSON
 
 ---
 
-### 2. 创建异步转换任务
+## 📤 上传模块 (`/api/upload`)
 
-创建转换任务并返回任务 ID。
+### 1. 初始化上传任务
 
-**接口**: `POST /api/v1/convert/async`
+**接口**: `POST /api/upload/init`
+
+**请求体**:
+```json
+{
+  "fileName": "video.webm",
+  "fileSize": 10240000,
+  "totalChunks": 10,
+  "chunkSize": 1024000
+}
+```
 
 **响应**:
 ```json
 {
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "pending",
-  "message": "任务已创建,请上传视频分片",
-  "upload_url": "/api/v1/convert/async/550e8400-e29b-41d4-a716-446655440000/chunk",
-  "status_url": "/api/v1/task/550e8400-e29b-41d4-a716-446655440000",
-  "download_url": "/api/v1/task/550e8400-e29b-41d4-a716-446655440000/download"
+  "success": true,
+  "message": "上传任务初始化成功",
+  "data": {
+    "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+    "fileName": "video.webm",
+    "totalChunks": 10
+  }
 }
 ```
 
 ---
 
-### 3. 上传视频分片
+### 2. 上传文件切片
 
-分片上传 WebM 视频数据。
+**接口**: `POST /api/upload/chunk`
 
-**接口**: `POST /api/v1/convert/async/:task_id/chunk`
+**请求类型**: `multipart/form-data`
 
-**请求头**:
-- `X-Last-Chunk: true` (最后一个分片时设置)
-
-**请求体**: 视频分片数据
+**FormData 字段**:
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `file` | File | ✅ | 文件切片 |
+| `uploadId` | String | ✅ | 上传任务ID |
+| `chunkIndex` | Number | ✅ | 切片索引(从0开始) |
 
 **响应**:
 ```json
 {
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "written": 1048576,
-  "is_last": false
-}
-```
-
-**前端分片上传示例**:
-```javascript
-// 创建任务
-const createResp = await fetch('http://127.0.0.1:28888/api/v1/convert/async', {
-  method: 'POST'
-});
-const { task_id, upload_url } = await createResp.json();
-
-// 分片上传
-const chunkSize = 1024 * 1024; // 1MB
-const totalChunks = Math.ceil(file.size / chunkSize);
-
-for (let i = 0; i < totalChunks; i++) {
-  const start = i * chunkSize;
-  const end = Math.min(start + chunkSize, file.size);
-  const chunk = file.slice(start, end);
-  const isLast = i === totalChunks - 1;
-
-  await fetch(`http://127.0.0.1:28888${upload_url}`, {
-    method: 'POST',
-    headers: {
-      'X-Last-Chunk': isLast ? 'true' : 'false'
-    },
-    body: chunk
-  });
+  "success": true,
+  "message": "切片上传成功",
+  "data": {
+    "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+    "chunkIndex": 5,
+    "uploadedChunks": 6,
+    "totalChunks": 10,
+    "isComplete": false
+  }
 }
 ```
 
 ---
 
-### 4. 查询任务状态
+### 3. 查询上传状态
 
-查询转换任务的状态和进度。
-
-**接口**: `GET /api/v1/task/:task_id`
+**接口**: `GET /api/upload/status/:uploadId`
 
 **响应**:
 ```json
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "processing",
-  "progress": 45,
-  "error": "",
-  "created_at": "2024-01-01T12:00:00Z",
-  "updated_at": "2024-01-01T12:00:30Z"
+  "success": true,
+  "data": {
+    "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+    "fileName": "video.webm",
+    "fileSize": 10240000,
+    "totalChunks": 10,
+    "uploadedChunks": 10,
+    "status": "merged",
+    "mergedPath": "/path/to/merged/file.webm",
+    "createdAt": "2025-11-16T15:00:00Z",
+    "updatedAt": "2025-11-16T15:05:00Z"
+  }
 }
 ```
 
 **状态说明**:
-- `pending`: 等待处理
+- `uploading`: 正在上传中
+- `merged`: 已合并完成
+- `failed`: 失败
+
+---
+
+### 4. 取消上传任务
+
+**接口**: `POST /api/upload/cancel/:uploadId`
+
+**响应**:
+```json
+{
+  "success": true,
+  "message": "上传任务已取消"
+}
+```
+
+---
+
+## 🎬 转换模块 (`/api/convert`)
+
+### 5. 开始视频转换
+
+**接口**: `POST /api/convert/start`
+
+**请求体**:
+```json
+{
+  "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+  "outputFormat": "mp4",
+  "quality": "medium"
+}
+```
+
+**参数说明**:
+- `uploadId` / `filePath`: 二选一
+  - `uploadId`: 引用已上传的文件
+  - `filePath`: 直接指定文件路径
+- `outputFormat`: 输出格式,默认 `mp4`
+- `quality`: 质量 `low`/`medium`/`high`,默认 `medium`
+
+**响应**:
+```json
+{
+  "success": true,
+  "message": "转换任务已启动",
+  "data": {
+    "taskId": "task_1234567890",
+    "inputPath": "/uploads/video.webm",
+    "outputFormat": "mp4",
+    "quality": "medium"
+  }
+}
+```
+
+---
+
+### 6. 查询转换状态
+
+**接口**: `GET /api/convert/status/:taskId`
+
+**响应**:
+```json
+{
+  "success": true,
+  "data": {
+    "taskId": "task_1234567890",
+    "status": "processing",
+    "progress": 65,
+    "inputPath": "/uploads/video.webm",
+    "outputPath": "/output/video.mp4",
+    "outputFormat": "mp4",
+    "quality": "medium",
+    "error": null,
+    "createdAt": "2025-11-16T15:10:00Z",
+    "updatedAt": "2025-11-16T15:12:00Z",
+    "completedAt": null
+  }
+}
+```
+
+**状态说明**:
+- `pending`: 等待开始
 - `processing`: 转换中
 - `completed`: 转换完成
 - `failed`: 转换失败
 
-**前端轮询示例**:
-```javascript
-async function pollTaskStatus(taskId) {
-  const checkStatus = async () => {
-    const resp = await fetch(`http://127.0.0.1:28888/api/v1/task/${taskId}`);
-    const data = await resp.json();
+---
 
-    console.log(`进度: ${data.progress}%`);
+### 7. 取消转换任务
 
-    if (data.status === 'completed') {
-      return data;
-    } else if (data.status === 'failed') {
-      throw new Error(data.error);
-    }
+**接口**: `POST /api/convert/cancel/:taskId`
 
-    // 继续轮询
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    return checkStatus();
-  };
-
-  return checkStatus();
+**响应**:
+```json
+{
+  "success": true,
+  "message": "转换任务已取消"
 }
 ```
 
 ---
 
-### 5. 下载转换后的视频
+### 8. 获取转换任务列表
 
-下载转换完成的 MP4 视频。
+**接口**: `GET /api/convert/list?status=completed&limit=20`
 
-**接口**: `GET /api/v1/task/:task_id/download`
+**查询参数**:
+- `status` (可选): 按状态筛选
+- `limit` (可选): 返回数量限制,默认 50
 
 **响应**:
-- Content-Type: `video/mp4`
-- Body: MP4 视频流
+```json
+{
+  "success": true,
+  "data": {
+    "tasks": [
+      {
+        "taskId": "task_xxx",
+        "status": "completed",
+        "progress": 100,
+        "outputPath": "/output/video.mp4"
+      }
+    ],
+    "total": 1
+  }
+}
+```
+
+---
+
+### 9. 下载转换后的文件
+
+**接口**: `GET /api/convert/download/:taskId`
+
+**响应**: 视频文件流 (`video/mp4`)
 
 **示例**:
-```bash
-curl -o output.mp4 http://127.0.0.1:28888/api/v1/task/550e8400-e29b-41d4-a716-446655440000/download
-```
-
-**前端下载示例**:
 ```javascript
-const resp = await fetch(`http://127.0.0.1:28888/api/v1/task/${taskId}/download`);
-const blob = await resp.blob();
-const url = URL.createObjectURL(blob);
-
-// 触发下载
-const a = document.createElement('a');
-a.href = url;
-a.download = 'converted.mp4';
-a.click();
+window.location.href = 'http://127.0.0.1:28888/api/convert/download/task_1234567890';
 ```
 
 ---
 
-### 6. 删除任务
+## 📊 进度查询模块 (`/api/progress`)
 
-删除任务及相关文件。
+### 10. 统一进度查询
 
-**接口**: `DELETE /api/v1/task/:task_id`
+**接口**: `GET /api/progress/:id`
 
-**响应**:
+**说明**: 自动识别上传任务或转换任务
+
+**上传任务响应**:
 ```json
 {
-  "message": "任务已删除"
+  "success": true,
+  "data": {
+    "type": "upload",
+    "taskId": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "uploading",
+    "progress": 60,
+    "uploadedChunks": 6,
+    "totalChunks": 10,
+    "fileName": "video.webm"
+  }
+}
+```
+
+**转换任务响应**:
+```json
+{
+  "success": true,
+  "data": {
+    "type": "convert",
+    "taskId": "task_1234567890",
+    "status": "processing",
+    "progress": 75,
+    "outputPath": "/output/video.mp4"
+  }
 }
 ```
 
 ---
 
-### 7. 列出所有任务
+## 🏥 其他接口
 
-获取所有转换任务列表。
-
-**接口**: `GET /api/v1/tasks`
-
-**响应**:
-```json
-{
-  "tasks": [
-    {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "status": "completed",
-      "progress": 100,
-      "created_at": "2024-01-01T12:00:00Z",
-      "updated_at": "2024-01-01T12:01:00Z"
-    }
-  ],
-  "total": 1
-}
-```
-
----
-
-### 8. 健康检查
-
-检查服务是否正常运行。
+### 健康检查
 
 **接口**: `GET /health`
 
@@ -289,88 +343,106 @@ a.click();
 ```json
 {
   "status": "ok",
-  "port": 28888
+  "timestamp": "2025-11-16T15:30:00Z",
+  "service": "ffmpeg-binary",
+  "version": "1.0.0"
 }
 ```
 
-## 完整前端使用示例
+### 静态文件访问
+
+**接口**: `GET /downloads/:filename`
+
+**说明**: 直接访问输出目录中的文件
+
+---
+
+## 💻 使用示例
+
+### 完整流程: 上传 → 转换 → 下载
 
 ```javascript
-class FFmpegConverter {
-  constructor(baseUrl = 'http://127.0.0.1:28888') {
-    this.baseUrl = baseUrl;
-  }
+const API_BASE = 'http://127.0.0.1:28888/api';
 
-  // 同步转换
-  async convertSync(webmBlob) {
-    const resp = await fetch(`${this.baseUrl}/api/v1/convert/sync`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'video/webm' },
-      body: webmBlob
-    });
-    return await resp.blob();
-  }
+// 1. 初始化上传
+const initRes = await fetch(`${API_BASE}/upload/init`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    fileName: 'video.webm',
+    fileSize: file.size,
+    totalChunks: Math.ceil(file.size / chunkSize),
+    chunkSize: chunkSize
+  })
+});
+const { uploadId } = (await initRes.json()).data;
 
-  // 异步转换(分片上传)
-  async convertAsync(file, onProgress) {
-    // 创建任务
-    const createResp = await fetch(`${this.baseUrl}/api/v1/convert/async`, {
-      method: 'POST'
-    });
-    const { task_id, upload_url } = await createResp.json();
+// 2. 上传切片
+for (let i = 0; i < totalChunks; i++) {
+  const chunk = file.slice(i * chunkSize, (i + 1) * chunkSize);
+  const formData = new FormData();
+  formData.append('file', chunk);
+  formData.append('uploadId', uploadId);
+  formData.append('chunkIndex', i);
 
-    // 分片上传
-    const chunkSize = 1024 * 1024;
-    const totalChunks = Math.ceil(file.size / chunkSize);
-
-    for (let i = 0; i < totalChunks; i++) {
-      const chunk = file.slice(i * chunkSize, (i + 1) * chunkSize);
-      const isLast = i === totalChunks - 1;
-
-      await fetch(`${this.baseUrl}${upload_url}`, {
-        method: 'POST',
-        headers: { 'X-Last-Chunk': isLast ? 'true' : 'false' },
-        body: chunk
-      });
-
-      onProgress?.({ uploaded: i + 1, total: totalChunks });
-    }
-
-    // 轮询状态
-    while (true) {
-      const statusResp = await fetch(`${this.baseUrl}/api/v1/task/${task_id}`);
-      const status = await statusResp.json();
-
-      onProgress?.({ status: status.status, progress: status.progress });
-
-      if (status.status === 'completed') {
-        // 下载结果
-        const downloadResp = await fetch(
-          `${this.baseUrl}/api/v1/task/${task_id}/download`
-        );
-        return await downloadResp.blob();
-      } else if (status.status === 'failed') {
-        throw new Error(status.error);
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-  }
+  await fetch(`${API_BASE}/upload/chunk`, {
+    method: 'POST',
+    body: formData
+  });
 }
 
-// 使用示例
-const converter = new FFmpegConverter();
+// 3. 等待合并
+let merged = false;
+while (!merged) {
+  const statusRes = await fetch(`${API_BASE}/upload/status/${uploadId}`);
+  const status = await statusRes.json();
+  merged = status.data.status === 'merged';
+  await new Promise(r => setTimeout(r, 1000));
+}
 
-// 同步转换
-const mp4Blob = await converter.convertSync(webmBlob);
-
-// 异步转换
-const mp4Blob = await converter.convertAsync(file, ({ progress, status }) => {
-  console.log(`${status}: ${progress}%`);
+// 4. 开始转换
+const convertRes = await fetch(`${API_BASE}/convert/start`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    uploadId: uploadId,
+    outputFormat: 'mp4',
+    quality: 'medium'
+  })
 });
+const { taskId } = (await convertRes.json()).data;
+
+// 5. 轮询转换进度
+let completed = false;
+while (!completed) {
+  const progressRes = await fetch(`${API_BASE}/progress/${taskId}`);
+  const progress = await progressRes.json();
+  console.log(`进度: ${progress.data.progress}%`);
+  completed = progress.data.status === 'completed';
+  await new Promise(r => setTimeout(r, 1000));
+}
+
+// 6. 下载文件
+window.location.href = `${API_BASE}/convert/download/${taskId}`;
 ```
 
-## 配置文件
+---
+
+## 🔧 配置说明
+
+### 环境变量
+
+服务运行时会自动创建以下目录:
+
+```bash
+~/.ffmpeg-binary/
+├── data/      # 合并后的文件
+├── temp/      # 临时切片文件
+├── output/    # 转换后的输出文件
+└── config.json # 配置文件
+```
+
+### 配置文件
 
 配置文件位置: `~/.ffmpeg-binary/config.json`
 
@@ -379,56 +451,49 @@ const mp4Blob = await converter.convertAsync(file, ({ progress, status }) => {
   "port": 28888,
   "host": "127.0.0.1",
   "data_dir": "~/.ffmpeg-binary/data",
+  "temp_dir": "~/.ffmpeg-binary/temp",
+  "output_dir": "~/.ffmpeg-binary/output",
   "ffmpeg_path": "/usr/local/bin/ffmpeg"
 }
 ```
 
-## 自启动管理
+---
 
-```bash
-# 安装自启动
-./ffmpeg-binary install
+## 📦 项目结构
 
-# 卸载自启动
-./ffmpeg-binary uninstall
+```
+ffmpeg-binary/
+├── main.go                      # 入口文件
+├── internal/
+│   ├── config/                  # 配置管理
+│   ├── converter/               # FFmpeg 转换器
+│   ├── task/                    # 转换任务管理
+│   ├── upload/                  # 上传任务管理
+│   ├── server/                  # HTTP 服务器
+│   │   ├── server.go           # 路由配置
+│   │   └── handlers.go         # 接口处理器
+│   └── autostart/              # 自启动管理
+├── examples/
+│   └── demo.html               # 前端示例
+└── scripts/                     # 构建脚本
 ```
 
-## 系统要求
+---
 
-- Go 1.23+
-- FFmpeg 4.0+ (需单独安装)
+## 🔗 相关链接
 
-### FFmpeg 安装
+- [快速开始指南](./QUICKSTART.md)
+- [构建文档](./docs/BUILD.md)
+- [接口测试示例](./examples/demo.html)
 
-**macOS**:
-```bash
-brew install ffmpeg
-```
+---
 
-**Windows**:
-下载地址: https://www.gyan.dev/ffmpeg/builds/
-
-**Linux**:
-```bash
-sudo apt install ffmpeg  # Ubuntu/Debian
-sudo yum install ffmpeg  # CentOS/RHEL
-```
-
-## 开发
-
-```bash
-# 运行测试
-go test ./...
-
-# 构建
-go build -o ffmpeg-binary .
-
-# 交叉编译
-GOOS=darwin GOARCH=amd64 go build -o ffmpeg-binary-darwin .
-GOOS=windows GOARCH=amd64 go build -o ffmpeg-binary.exe .
-GOOS=linux GOARCH=amd64 go build -o ffmpeg-binary-linux .
-```
-
-## 许可证
+## 📝 许可证
 
 MIT License
+
+---
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request!
