@@ -111,28 +111,25 @@ echo "配置 FFmpeg Binary 服务..."
 # 安装自启动 (作为当前用户)
 sudo -u "$CURRENT_USER" /Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary install 2>/dev/null || true
 
-# 启动服务 (作为当前用户)
-sudo -u "$CURRENT_USER" nohup /Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary > "$USER_HOME/Library/Logs/ffmpeg-binary.log" 2>&1 &
+# 设置 PATH 环境变量,包含 Homebrew 路径
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+# 启动服务 (作为当前用户,带正确的 PATH)
+sudo -u "$CURRENT_USER" bash -c "export PATH='/opt/homebrew/bin:/usr/local/bin:$PATH'; nohup /Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary > $USER_HOME/Library/Logs/ffmpeg-binary.log 2>&1 &"
 
 # 等待服务启动
-sleep 2
+sleep 3
 
-# 显示安装成功消息
-cat > /tmp/ffmpeg-binary-install.txt << 'EOF'
-
-╔══════════════════════════════════════════════════════════════╗
-║              FFmpeg Binary 安装成功!                        ║
-╚══════════════════════════════════════════════════════════════╝
-
-✅ 服务已启动并设置为开机自启
-📁 日志文件: ~/Library/Logs/ffmpeg-binary.log
-🌐 服务地址: http://127.0.0.1:18888
-
-服务将在后台运行,不会显示任何窗口。
-EOF
-
-# 如果有图形界面,显示通知
-sudo -u "$CURRENT_USER" osascript -e 'display notification "FFmpeg Binary 服务已安装并启动" with title "安装成功"' 2>/dev/null || true
+# 检查服务是否启动成功
+if pgrep -f "ffmpeg-binary" > /dev/null 2>&1; then
+    echo "✓ 服务启动成功"
+    # 显示安装成功通知
+    sudo -u "$CURRENT_USER" osascript -e 'display notification "FFmpeg Binary 服务已安装并启动" with title "安装成功"' 2>/dev/null || true
+else
+    echo "⚠️ 服务启动失败,请查看日志: $USER_HOME/Library/Logs/ffmpeg-binary.log"
+    # 显示警告通知
+    sudo -u "$CURRENT_USER" osascript -e 'display notification "服务已安装,但启动失败。请查看日志文件。" with title "FFmpeg Binary"' 2>/dev/null || true
+fi
 
 exit 0
 POSTINSTALL
