@@ -197,7 +197,28 @@ cat > "$DIST_DIR/resources/conclusion.html" << 'CONCLUSION'
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 20px; }
         h1 { color: #4CAF50; }
-        .info { background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        .info {
+            background: #2d2d2d;
+            color: #ffffff;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border: 1px solid #4a4a4a;
+        }
+        .info h3 {
+            color: #ffffff;
+            margin-top: 0;
+        }
+        .info strong {
+            color: #ffd700;
+        }
+        code {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: Monaco, Consolas, monospace;
+        }
     </style>
 </head>
 <body>
