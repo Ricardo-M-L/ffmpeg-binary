@@ -112,15 +112,18 @@ func calculateRetainedSegments(videoDuration float64, deleteIntervals []TimeInte
 // splitSegment 切割单个视频片段
 func (s *Splitter) splitSegment(inputPath, outputPath string, startTime, duration float64) error {
 	// 构建FFmpeg命令
-	// ffmpeg -i input.mp4 -ss 10 -t 20 -c copy -f mp4 -movflags +faststart -avoid_negative_ts 1 output.mp4
+	// 使用重新编码以获得精确的切割(不使用 -c copy)
+	// ffmpeg -ss 开始时间 -i input.mp4 -t 时长 -c:v libx264 -c:a aac output.mp4
 	args := []string{
+		"-ss", fmt.Sprintf("%.3f", startTime), // -ss 放在 -i 之前,更快速定位
 		"-i", inputPath,
-		"-ss", fmt.Sprintf("%.3f", startTime),
 		"-t", fmt.Sprintf("%.3f", duration),
-		"-c", "copy", // 无损复制,不重新编码
+		"-c:v", "libx264", // 重新编码视频以获得精确切割
+		"-c:a", "aac", // 重新编码音频
+		"-preset", "ultrafast", // 使用最快编码速度
+		"-crf", "23", // 质量控制(18-28,越小质量越好)
 		"-f", "mp4",
 		"-movflags", "+faststart", // 优化流媒体播放
-		"-avoid_negative_ts", "1", // 避免负时间戳
 		"-y", // 覆盖输出文件
 		outputPath,
 	}
