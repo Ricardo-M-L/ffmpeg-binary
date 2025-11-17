@@ -138,13 +138,25 @@ if ! command -v ffmpeg &> /dev/null; then
 
     # 检测 CPU 架构
     ARCH=$(uname -m)
+    echo "检测到 CPU 架构: $ARCH"
+
+    # evermeet.cx 只提供 x86_64 版本,需要 Rosetta 2 在 Apple Silicon 上运行
+    # 先检查是否有 Rosetta 2 (对于 Apple Silicon Mac)
     if [ "$ARCH" = "arm64" ]; then
-        FFMPEG_URL="https://evermeet.cx/ffmpeg/getrelease/zip"
-        echo "检测到 Apple Silicon (arm64)"
-    else
-        FFMPEG_URL="https://evermeet.cx/ffmpeg/getrelease/zip"
-        echo "检测到 Intel (amd64)"
+        echo "检测到 Apple Silicon Mac"
+        if ! /usr/bin/pgrep -q oahd; then
+            echo "⚠️  未检测到 Rosetta 2,正在安装..."
+            # 静默安装 Rosetta 2
+            /usr/sbin/softwareupdate --install-rosetta --agree-to-license 2>&1 | tee -a "$LOG_FILE" || true
+            sleep 2
+        else
+            echo "✓ Rosetta 2 已安装"
+        fi
     fi
+
+    # 使用 evermeet.cx 的 x86_64 版本 (会通过 Rosetta 2 在 Apple Silicon 上运行)
+    FFMPEG_URL="https://evermeet.cx/ffmpeg/getrelease/zip"
+    echo "下载 FFmpeg (x86_64 版本,支持所有 Mac 通过 Rosetta 2)"
 
     # 下载到临时目录
     TMP_DIR=$(mktemp -d)
