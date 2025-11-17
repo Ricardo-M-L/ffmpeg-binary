@@ -47,14 +47,27 @@ APP_PATH="$DIST_DIR/pkg-root/Applications/FFmpeg-Binary.app"
 mkdir -p "$APP_PATH/Contents/MacOS"
 mkdir -p "$APP_PATH/Contents/Resources"
 
-# 复制可执行文件
-cp "$DIST_DIR/ffmpeg-binary" "$APP_PATH/Contents/MacOS/"
+# 复制可执行文件和 GUI 启动器
+cp "$DIST_DIR/ffmpeg-binary" "$APP_PATH/Contents/MacOS/ffmpeg-binary-service"
+chmod +x "$APP_PATH/Contents/MacOS/ffmpeg-binary-service"
+
+# 复制 GUI 启动器作为主可执行文件
+cp "scripts/gui-launcher.sh" "$APP_PATH/Contents/MacOS/ffmpeg-binary"
 chmod +x "$APP_PATH/Contents/MacOS/ffmpeg-binary"
+
+# 复制卸载脚本到 Resources
+cp "scripts/uninstall.sh" "$APP_PATH/Contents/Resources/"
+chmod +x "$APP_PATH/Contents/Resources/uninstall.sh"
+
+# 复制清理监控脚本到 Resources
+cp "scripts/cleanup-watcher.sh" "$APP_PATH/Contents/Resources/"
+chmod +x "$APP_PATH/Contents/Resources/cleanup-watcher.sh"
 
 # 复制图标
 if [ -f "$ICON_FILE" ]; then
     cp "$ICON_FILE" "$APP_PATH/Contents/Resources/"
-    ICON_ENTRY="    <key>CFBundleIconFile</key>\n    <string>icon.icns</string>"
+    ICON_ENTRY="    <key>CFBundleIconFile</key>
+    <string>icon.icns</string>"
 else
     echo "    ⚠️  图标文件不存在"
     ICON_ENTRY=""
@@ -83,10 +96,10 @@ cat > "$APP_PATH/Contents/Info.plist" << EOF
 $ICON_ENTRY
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
-    <key>LSUIElement</key>
-    <true/>
     <key>NSHighResolutionCapable</key>
-    <true/>
+    <string>true</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.utilities</string>
 </dict>
 </plist>
 EOF
@@ -109,13 +122,13 @@ USER_HOME=$(eval echo ~$CURRENT_USER)
 echo "配置 FFmpeg Binary 服务..."
 
 # 安装自启动 (作为当前用户)
-sudo -u "$CURRENT_USER" /Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary install 2>/dev/null || true
+sudo -u "$CURRENT_USER" /Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary-service install 2>/dev/null || true
 
 # 设置 PATH 环境变量,包含 Homebrew 路径
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 # 启动服务 (作为当前用户,带正确的 PATH)
-sudo -u "$CURRENT_USER" bash -c "export PATH='/opt/homebrew/bin:/usr/local/bin:$PATH'; nohup /Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary > $USER_HOME/Library/Logs/ffmpeg-binary.log 2>&1 &"
+sudo -u "$CURRENT_USER" bash -c "export PATH='/opt/homebrew/bin:/usr/local/bin:$PATH'; nohup /Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary-service > $USER_HOME/Library/Logs/ffmpeg-binary.log 2>&1 &"
 
 # 等待服务启动
 sleep 3
@@ -123,13 +136,41 @@ sleep 3
 # 检查服务是否启动成功
 if pgrep -f "ffmpeg-binary" > /dev/null 2>&1; then
     echo "✓ 服务启动成功"
-    # 显示安装成功通知
-    sudo -u "$CURRENT_USER" osascript -e 'display notification "FFmpeg Binary 服务已安装并启动" with title "安装成功"' 2>/dev/null || true
 else
     echo "⚠️ 服务启动失败,请查看日志: $USER_HOME/Library/Logs/ffmpeg-binary.log"
-    # 显示警告通知
-    sudo -u "$CURRENT_USER" osascript -e 'display notification "服务已安装,但启动失败。请查看日志文件。" with title "FFmpeg Binary"' 2>/dev/null || true
 fi
+
+# 安装清理监控服务
+echo "安装清理监控服务..."
+cat > "$USER_HOME/Library/LaunchAgents/com.ffmpeg.binary.watcher.plist" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.ffmpeg.binary.watcher</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/FFmpeg-Binary.app/Contents/Resources/cleanup-watcher.sh</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>60</integer>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>$USER_HOME/Library/Logs/ffmpeg-binary-watcher.log</string>
+    <key>StandardErrorPath</key>
+    <string>$USER_HOME/Library/Logs/ffmpeg-binary-watcher.log</string>
+</dict>
+</plist>
+EOF
+
+# 加载监控服务
+sudo -u "$CURRENT_USER" launchctl load "$USER_HOME/Library/LaunchAgents/com.ffmpeg.binary.watcher.plist" 2>/dev/null || true
+echo "✓ 监控服务已安装"
+
+# 显示安装成功通知
+sudo -u "$CURRENT_USER" osascript -e 'display notification "FFmpeg Binary 已安装,拖到废纸篓即可自动卸载" with title "安装成功"' 2>/dev/null || true
 
 exit 0
 POSTINSTALL
@@ -236,9 +277,14 @@ cat > "$DIST_DIR/resources/conclusion.html" << 'CONCLUSION'
     <p>服务已在后台启动,可以直接通过 API 使用。详细 API 文档请查看项目 README。</p>
 
     <h3>卸载方法:</h3>
-    <p>1. 停止服务: <code>pkill -f ffmpeg-binary</code><br>
-       2. 删除自启动: <code>/Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary uninstall</code><br>
-       3. 删除应用: 在"应用程序"中删除 FFmpeg-Binary.app</p>
+    <p><strong>只需拖到废纸篓即可!</strong></p>
+    <p>直接将 FFmpeg-Binary.app 从"应用程序"或启动台拖到废纸篓,系统会在 1 分钟内自动清理所有相关文件和服务,包括:</p>
+    <ul>
+        <li>✓ 停止运行中的服务进程</li>
+        <li>✓ 移除自启动配置</li>
+        <li>✓ 清理数据目录 (~/.ffmpeg-binary)</li>
+    </ul>
+    <p><small>💡 提示:拖到废纸篓后约 1 分钟内自动清理完成,无需清空废纸篓</small></p>
 </body>
 </html>
 CONCLUSION

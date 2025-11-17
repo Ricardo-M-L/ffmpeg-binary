@@ -3,6 +3,7 @@ package autostart
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 )
@@ -107,11 +108,41 @@ func uninstallMacOS() error {
 
 	plistPath := filepath.Join(home, "Library", "LaunchAgents", "com.ffmpeg.binary.plist")
 
-	// 卸载服务
-	fmt.Println("如需停止服务,请运行: launchctl unload", plistPath)
+	// 1. 先停止并卸载 launchd 服务
+	fmt.Println("正在停止 launchd 服务...")
+	if err := execCommand("launchctl", "unload", plistPath); err != nil {
+		fmt.Printf("警告: launchctl unload 失败 (服务可能未运行): %v\n", err)
+		// 继续执行,不返回错误
+	}
 
-	// 删除 plist 文件
-	return os.Remove(plistPath)
+	// 2. 删除 plist 文件
+	fmt.Println("正在删除自启动配置文件...")
+	if err := os.Remove(plistPath); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("自启动配置文件不存在,已跳过")
+		} else {
+			return fmt.Errorf("删除配置文件失败: %v", err)
+		}
+	} else {
+		fmt.Println("✅ 自启动配置已删除")
+	}
+
+	// 3. 停止正在运行的进程
+	fmt.Println("正在停止服务进程...")
+	if err := execCommand("pkill", "-f", "ffmpeg-binary"); err != nil {
+		fmt.Println("警告: 未找到运行中的服务进程")
+	} else {
+		fmt.Println("✅ 服务进程已停止")
+	}
+
+	fmt.Println("\n✅ 卸载完成!")
+	return nil
+}
+
+// execCommand 执行系统命令
+func execCommand(name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	return cmd.Run()
 }
 
 // installWindows 安装 Windows 自启动 (注册表)

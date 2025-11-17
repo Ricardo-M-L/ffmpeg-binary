@@ -303,7 +303,7 @@ git push origin v1.0.0
 - ✅ 自动端口选择(28888)
 - ✅ 开机自启动
 - ✅ 本地服务(127.0.0.1)
-
+ 
 ### 下载
 
 - [macOS (DMG)](FFmpeg-Binary-Installer.dmg) - 支持 Intel 和 Apple Silicon
