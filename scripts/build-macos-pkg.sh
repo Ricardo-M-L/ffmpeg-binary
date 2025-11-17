@@ -115,6 +115,19 @@ fi
 
 USER_HOME=$(eval echo ~$CURRENT_USER)
 FFMPEG_INSTALL_DIR="/usr/local/bin"
+LOG_FILE="$USER_HOME/Library/Logs/goalfy-mediaconverter-install.log"
+
+# 确保日志目录存在
+mkdir -p "$USER_HOME/Library/Logs"
+
+# 重定向所有输出到日志文件
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+echo "========================================="
+echo "GoalfyMediaConverter 安装脚本"
+echo "开始时间: $(date)"
+echo "========================================="
+echo ""
 
 echo "配置 GoalfyMediaConverter 服务..."
 
@@ -135,71 +148,101 @@ if ! command -v ffmpeg &> /dev/null; then
 
     # 下载到临时目录
     TMP_DIR=$(mktemp -d)
-    echo "下载 FFmpeg..."
-    curl -L -o "$TMP_DIR/ffmpeg.zip" "$FFMPEG_URL"
+    echo "下载 FFmpeg (可能需要几分钟,取决于网络速度)..."
 
-    if [ $? -ne 0 ]; then
-        echo "❌ FFmpeg 下载失败"
+    # 添加超时参数防止卡死:
+    # --connect-timeout 30: 连接超时 30 秒
+    # --max-time 300: 总下载时间不超过 5 分钟
+    # -S: 显示错误信息
+    # --retry 2: 失败时重试 2 次
+    # --retry-delay 3: 重试间隔 3 秒
+    if ! curl -L -S --connect-timeout 30 --max-time 300 --retry 2 --retry-delay 3 -o "$TMP_DIR/ffmpeg.zip" "$FFMPEG_URL"; then
+        echo "❌ FFmpeg 下载失败 (可能是网络问题或下载超时)"
+        echo "   您可以稍后手动安装 FFmpeg: brew install ffmpeg"
+        echo "   或从 https://evermeet.cx/ffmpeg/ 下载安装"
         rm -rf "$TMP_DIR"
-        exit 1
-    fi
-
-    # 解压 ZIP 文件 (macOS 自带 unzip)
-    echo "解压 FFmpeg..."
-    cd "$TMP_DIR"
-    unzip -q ffmpeg.zip
-
-    # 安装到系统目录 (postinstall 已经是 root 权限,可以直接复制)
-    if [ -f "ffmpeg" ]; then
-        echo "安装 FFmpeg 到 $FFMPEG_INSTALL_DIR..."
-
-        # 确保目录存在
-        mkdir -p "$FFMPEG_INSTALL_DIR"
-
-        # 直接复制 (已经是 root 权限)
-        cp -f ffmpeg "$FFMPEG_INSTALL_DIR/ffmpeg"
-
-        # 设置执行权限
-        chmod 755 "$FFMPEG_INSTALL_DIR/ffmpeg"
-
-        echo "✓ FFmpeg 安装成功"
+        # 下载失败不阻止安装继续,让用户可以手动安装 FFmpeg
+        echo "⚠️ 跳过 FFmpeg 安装,继续配置服务..."
     else
-        echo "❌ FFmpeg 解压失败"
-        rm -rf "$TMP_DIR"
-        exit 1
-    fi
+        echo "✓ FFmpeg 下载完成"
 
-    # 清理临时文件
-    rm -rf "$TMP_DIR"
+        # 解压 ZIP 文件 (macOS 自带 unzip)
+        echo "解压 FFmpeg..."
+        cd "$TMP_DIR"
+        unzip -q ffmpeg.zip
+
+        # 安装到系统目录 (postinstall 已经是 root 权限,可以直接复制)
+        if [ -f "ffmpeg" ]; then
+            echo "安装 FFmpeg 到 $FFMPEG_INSTALL_DIR..."
+
+            # 确保目录存在
+            mkdir -p "$FFMPEG_INSTALL_DIR"
+
+            # 直接复制 (已经是 root 权限)
+            cp -f ffmpeg "$FFMPEG_INSTALL_DIR/ffmpeg"
+
+            # 设置执行权限
+            chmod 755 "$FFMPEG_INSTALL_DIR/ffmpeg"
+
+            echo "✓ FFmpeg 安装成功"
+        else
+            echo "❌ FFmpeg 解压失败"
+            rm -rf "$TMP_DIR"
+            echo "⚠️ 跳过 FFmpeg 安装,继续配置服务..."
+        fi
+
+        # 清理临时文件
+        rm -rf "$TMP_DIR"
+    fi
 else
     echo "✓ FFmpeg 已安装: $(which ffmpeg)"
 fi
 
-# 2. 安装自启动 (作为当前用户)
+# 2. 安装自启动配置 (只安装,不立即启动)
+echo ""
 echo "配置自启动..."
-sudo -u "$CURRENT_USER" /Applications/GoalfyMediaConverter.app/Contents/MacOS/ffmpeg-binary-service install 2>/dev/null || true
-
-# 3. 启动服务 (作为当前用户)
-echo "启动 GoalfyMediaConverter 服务..."
-sudo -u "$CURRENT_USER" bash -c "nohup /Applications/GoalfyMediaConverter.app/Contents/MacOS/ffmpeg-binary-service > '$USER_HOME/Library/Logs/goalfy-mediaconverter.log' 2>&1 &"
-
-# 等待服务启动
-sleep 3
-
-# 4. 检查服务是否启动成功
-if lsof -i :28888 > /dev/null 2>&1; then
-    echo "✓ 服务启动成功 (端口 28888 已监听)"
-elif pgrep -f "ffmpeg-binary-service" > /dev/null 2>&1; then
-    echo "⚠️ 服务进程已启动,但端口 28888 未监听,请查看日志: $USER_HOME/Library/Logs/goalfy-mediaconverter.log"
+if sudo -u "$CURRENT_USER" /Applications/GoalfyMediaConverter.app/Contents/MacOS/ffmpeg-binary-service install 2>&1 | tee -a "$LOG_FILE"; then
+    echo "✓ 自启动配置已安装"
 else
-    echo "⚠️ 服务启动失败,请查看日志: $USER_HOME/Library/Logs/goalfy-mediaconverter.log"
+    echo "⚠️ 自启动配置失败,请查看日志"
 fi
 
-# 5. 修改应用包的所有权为当前用户,避免删除时需要密码
+# 3. 加载 LaunchAgent 立即启动服务
+echo ""
+echo "启动 GoalfyMediaConverter 服务..."
+PLIST_PATH="$USER_HOME/Library/LaunchAgents/com.goalfy.mediaconverter.plist"
+if [ -f "$PLIST_PATH" ]; then
+    # 使用 launchctl 加载服务,让 launchd 负责启动
+    # 这样不会阻塞 postinstall 脚本
+    sudo -u "$CURRENT_USER" launchctl load "$PLIST_PATH" 2>&1 | tee -a "$LOG_FILE" || true
+    echo "✓ 服务配置已加载,将在后台启动"
+    echo "  提示: 服务将在几秒钟内启动完成"
+else
+    echo "⚠️ 未找到 LaunchAgent 配置文件"
+fi
+
+# 4. 修改应用包的所有权为当前用户,避免删除时需要密码
 chown -R "$CURRENT_USER:staff" /Applications/GoalfyMediaConverter.app
 echo "✓ 已设置应用包权限"
 
-# 6. 显示安装成功通知
+# 5. 显示安装成功通知
+echo ""
+echo "========================================="
+echo "安装完成!"
+echo "结束时间: $(date)"
+echo "========================================="
+echo ""
+echo "服务信息:"
+echo "  • 地址: http://127.0.0.1:28888"
+echo "  • 日志: $USER_HOME/Library/Logs/goalfy-mediaconverter.log"
+echo "  • 安装日志: $LOG_FILE"
+echo ""
+echo "提示:"
+echo "  • 服务已在后台启动 (可能需要几秒钟)"
+echo "  • 如果服务未启动,请查看日志文件"
+echo "  • 卸载方法: 直接将应用拖到废纸篓即可"
+echo ""
+
 sudo -u "$CURRENT_USER" osascript -e 'display notification "GoalfyMediaConverter 已安装,拖到废纸篓即可自动卸载" with title "安装成功"' 2>/dev/null || true
 
 exit 0
