@@ -752,7 +752,10 @@
                 info.classList.add('error');
                 info.innerHTML = `
                     <strong>⚠️ 服务未运行</strong><br>
-                    请先启动 FFmpeg Binary 服务: <code>go run main.go</code> 或 <code>./ffmpeg-binary</code>
+                    请检查 FFmpeg Binary 服务是否已启动:<br>
+                    • macOS PKG 安装: 服务应该已自动启动<br>
+                    • 开发环境: <code>go run main.go</code> 或 <code>./ffmpeg-binary</code><br>
+                    • 检查服务: <code>lsof -i :28888</code>
                 `;
             }
         }

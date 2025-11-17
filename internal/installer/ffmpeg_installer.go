@@ -17,9 +17,11 @@ func NewFFmpegInstaller() *FFmpegInstaller {
 }
 
 // CheckAndInstall 检查 FFmpeg 是否存在,不存在则自动安装
+// 注意: PKG安装时不应该调用此方法,应该直接调用 FindFFmpeg()
+// 因为 PKG 的 postinstall 脚本会以 root 权限安装 FFmpeg
 func (i *FFmpegInstaller) CheckAndInstall() (string, error) {
 	// 1. 先尝试查找已安装的 FFmpeg
-	ffmpegPath, err := i.findFFmpeg()
+	ffmpegPath, err := i.FindFFmpeg()
 	if err == nil && ffmpegPath != "" {
 		// FFmpeg 已存在,验证是否可用
 		if i.validateFFmpeg(ffmpegPath) {
@@ -36,7 +38,7 @@ func (i *FFmpegInstaller) CheckAndInstall() (string, error) {
 	}
 
 	// 3. 重新查找安装后的 FFmpeg
-	ffmpegPath, err = i.findFFmpeg()
+	ffmpegPath, err = i.FindFFmpeg()
 	if err != nil {
 		return "", fmt.Errorf("安装后未找到 FFmpeg: %v", err)
 	}
@@ -48,6 +50,11 @@ func (i *FFmpegInstaller) CheckAndInstall() (string, error) {
 
 	fmt.Printf("✅ FFmpeg 安装成功: %s\n", ffmpegPath)
 	return ffmpegPath, nil
+}
+
+// FindFFmpeg 查找 FFmpeg 可执行文件 (公开方法,用于只查找不安装)
+func (i *FFmpegInstaller) FindFFmpeg() (string, error) {
+	return i.findFFmpeg()
 }
 
 // findFFmpeg 查找 FFmpeg 可执行文件
@@ -108,46 +115,95 @@ func (i *FFmpegInstaller) installFFmpeg() error {
 
 // installOnMacOS 在 macOS 上安装 FFmpeg
 func (i *FFmpegInstaller) installOnMacOS() error {
-	// 检查 Homebrew 是否安装
-	if !i.isHomebrewInstalled() {
-		fmt.Println("⚠️  Homebrew 未安装,正在安装 Homebrew...")
-		if err := i.installHomebrew(); err != nil {
-			return fmt.Errorf("安装 Homebrew 失败: %v", err)
+	fmt.Println("📦 正在下载 FFmpeg 静态编译版本...")
+
+	// 使用 evermeet.cx 提供的 FFmpeg 静态编译版本 (ZIP格式)
+	ffmpegURL := "https://evermeet.cx/ffmpeg/getrelease/zip"
+
+	// 创建临时目录
+	tmpDir, err := os.MkdirTemp("", "ffmpeg-install-*")
+	if err != nil {
+		return fmt.Errorf("创建临时目录失败: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	zipPath := tmpDir + "/ffmpeg.zip"
+
+	// 下载 FFmpeg ZIP 文件
+	fmt.Println("下载 FFmpeg...")
+	cmd := exec.Command("curl", "-L", "-o", zipPath, ffmpegURL)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("下载 FFmpeg 失败: %v", err)
+	}
+
+	// 解压 ZIP 文件
+	fmt.Println("解压 FFmpeg...")
+	cmd = exec.Command("unzip", "-q", zipPath, "-d", tmpDir)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("解压 FFmpeg 失败: %v", err)
+	}
+
+	// 安装到 /usr/local/bin
+	ffmpegBinary := tmpDir + "/ffmpeg"
+	installDir := "/usr/local/bin"
+
+	if _, err := os.Stat(ffmpegBinary); os.IsNotExist(err) {
+		return fmt.Errorf("解压后未找到 ffmpeg 二进制文件")
+	}
+
+	fmt.Printf("安装 FFmpeg 到 %s...\n", installDir)
+
+	// 确保安装目录存在
+	if err := os.MkdirAll(installDir, 0755); err != nil {
+		return fmt.Errorf("创建安装目录失败: %v", err)
+	}
+
+	// 检查是否已经是 root 权限 (UID == 0)
+	isRoot := os.Geteuid() == 0
+
+	targetPath := installDir + "/ffmpeg"
+
+	// 复制到系统目录
+	if isRoot {
+		// 已经是 root 权限,直接复制
+		cmd = exec.Command("cp", "-f", ffmpegBinary, targetPath)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("复制 FFmpeg 失败: %v", err)
+		}
+
+		// 设置执行权限
+		if err := os.Chmod(targetPath, 0755); err != nil {
+			return fmt.Errorf("设置权限失败: %v", err)
+		}
+	} else {
+		// 非 root 权限,尝试直接复制
+		cmd = exec.Command("cp", "-f", ffmpegBinary, targetPath)
+		if err := cmd.Run(); err != nil {
+			// 如果复制失败,尝试使用 sudo
+			fmt.Println("需要管理员权限安装 FFmpeg...")
+			cmd = exec.Command("sudo", "cp", "-f", ffmpegBinary, targetPath)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Stdin = os.Stdin
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("安装 FFmpeg 失败: %v", err)
+			}
+
+			// 使用 sudo 设置权限
+			cmd = exec.Command("sudo", "chmod", "+x", targetPath)
+			cmd.Run() // 忽略错误
+		} else {
+			// 直接复制成功,设置权限
+			os.Chmod(targetPath, 0755) // 忽略错误
 		}
 	}
 
-	fmt.Println("📦 正在通过 Homebrew 安装 FFmpeg...")
-	cmd := exec.Command("brew", "install", "ffmpeg")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("brew install ffmpeg 失败: %v", err)
-	}
-
-	return nil
-}
-
-// isHomebrewInstalled 检查 Homebrew 是否已安装
-func (i *FFmpegInstaller) isHomebrewInstalled() bool {
-	_, err := exec.LookPath("brew")
-	return err == nil
-}
-
-// installHomebrew 安装 Homebrew
-func (i *FFmpegInstaller) installHomebrew() error {
-	// Homebrew 官方安装脚本
-	installScript := `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`
-
-	cmd := exec.Command("bash", "-c", installScript)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin // 需要用户交互
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("执行 Homebrew 安装脚本失败: %v", err)
-	}
-
+	fmt.Println("✅ FFmpeg 安装成功")
 	return nil
 }
 

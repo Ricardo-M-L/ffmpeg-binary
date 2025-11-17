@@ -114,33 +114,92 @@ if [ -z "$CURRENT_USER" ]; then
 fi
 
 USER_HOME=$(eval echo ~$CURRENT_USER)
+FFMPEG_INSTALL_DIR="/usr/local/bin"
 
 echo "配置 FFmpeg Binary 服务..."
 
-# 安装自启动 (作为当前用户)
+# 1. 检查并安装 FFmpeg (在启动服务前)
+echo "检查 FFmpeg 是否已安装..."
+if ! command -v ffmpeg &> /dev/null; then
+    echo "⚠️  FFmpeg 未安装,正在下载静态编译版本..."
+
+    # 检测 CPU 架构
+    ARCH=$(uname -m)
+    if [ "$ARCH" = "arm64" ]; then
+        FFMPEG_URL="https://evermeet.cx/ffmpeg/getrelease/zip"
+        echo "检测到 Apple Silicon (arm64)"
+    else
+        FFMPEG_URL="https://evermeet.cx/ffmpeg/getrelease/zip"
+        echo "检测到 Intel (amd64)"
+    fi
+
+    # 下载到临时目录
+    TMP_DIR=$(mktemp -d)
+    echo "下载 FFmpeg..."
+    curl -L -o "$TMP_DIR/ffmpeg.zip" "$FFMPEG_URL"
+
+    if [ $? -ne 0 ]; then
+        echo "❌ FFmpeg 下载失败"
+        rm -rf "$TMP_DIR"
+        exit 1
+    fi
+
+    # 解压 ZIP 文件 (macOS 自带 unzip)
+    echo "解压 FFmpeg..."
+    cd "$TMP_DIR"
+    unzip -q ffmpeg.zip
+
+    # 安装到系统目录 (postinstall 已经是 root 权限,可以直接复制)
+    if [ -f "ffmpeg" ]; then
+        echo "安装 FFmpeg 到 $FFMPEG_INSTALL_DIR..."
+
+        # 确保目录存在
+        mkdir -p "$FFMPEG_INSTALL_DIR"
+
+        # 直接复制 (已经是 root 权限)
+        cp -f ffmpeg "$FFMPEG_INSTALL_DIR/ffmpeg"
+
+        # 设置执行权限
+        chmod 755 "$FFMPEG_INSTALL_DIR/ffmpeg"
+
+        echo "✓ FFmpeg 安装成功"
+    else
+        echo "❌ FFmpeg 解压失败"
+        rm -rf "$TMP_DIR"
+        exit 1
+    fi
+
+    # 清理临时文件
+    rm -rf "$TMP_DIR"
+else
+    echo "✓ FFmpeg 已安装: $(which ffmpeg)"
+fi
+
+# 2. 安装自启动 (作为当前用户)
+echo "配置自启动..."
 sudo -u "$CURRENT_USER" /Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary-service install 2>/dev/null || true
 
-# 设置 PATH 环境变量,包含 Homebrew 路径
-export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
-
-# 启动服务 (作为当前用户,带正确的 PATH)
-sudo -u "$CURRENT_USER" bash -c "export PATH='/opt/homebrew/bin:/usr/local/bin:$PATH'; nohup /Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary-service > $USER_HOME/Library/Logs/ffmpeg-binary.log 2>&1 &"
+# 3. 启动服务 (作为当前用户)
+echo "启动 FFmpeg Binary 服务..."
+sudo -u "$CURRENT_USER" bash -c "nohup /Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary-service > '$USER_HOME/Library/Logs/ffmpeg-binary.log' 2>&1 &"
 
 # 等待服务启动
 sleep 3
 
-# 检查服务是否启动成功
-if pgrep -f "ffmpeg-binary" > /dev/null 2>&1; then
-    echo "✓ 服务启动成功"
+# 4. 检查服务是否启动成功
+if lsof -i :28888 > /dev/null 2>&1; then
+    echo "✓ 服务启动成功 (端口 28888 已监听)"
+elif pgrep -f "ffmpeg-binary-service" > /dev/null 2>&1; then
+    echo "⚠️ 服务进程已启动,但端口 28888 未监听,请查看日志: $USER_HOME/Library/Logs/ffmpeg-binary.log"
 else
     echo "⚠️ 服务启动失败,请查看日志: $USER_HOME/Library/Logs/ffmpeg-binary.log"
 fi
 
-# 修改应用包的所有权为当前用户,避免删除时需要密码
+# 5. 修改应用包的所有权为当前用户,避免删除时需要密码
 chown -R "$CURRENT_USER:staff" /Applications/FFmpeg-Binary.app
 echo "✓ 已设置应用包权限"
 
-# 显示安装成功通知
+# 6. 显示安装成功通知
 sudo -u "$CURRENT_USER" osascript -e 'display notification "FFmpeg Binary 已安装,拖到废纸篓即可自动卸载" with title "安装成功"' 2>/dev/null || true
 
 exit 0
@@ -193,7 +252,7 @@ cat > "$DIST_DIR/resources/welcome.html" << 'WELCOME'
 
     <h3>系统要求:</h3>
     <p>• macOS 10.15 或更高版本<br>
-       • FFmpeg 4.0+ (安装命令: <code>brew install ffmpeg</code>)</p>
+       • 无需手动安装任何依赖,FFmpeg 将自动下载安装</p>
 
     <p><strong>注意:</strong> 服务将在后台静默运行,不会显示任何窗口。</p>
 </body>

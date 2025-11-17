@@ -18,11 +18,16 @@ func main() {
 		log.Fatalf("加载配置失败: %v", err)
 	}
 
-	// 检查并自动安装 FFmpeg
+	// 只查找 FFmpeg,不自动安装 (安装由 PKG 的 postinstall 脚本处理)
 	ffmpegInstaller := installer.NewFFmpegInstaller()
-	ffmpegPath, err := ffmpegInstaller.CheckAndInstall()
+	ffmpegPath, err := ffmpegInstaller.FindFFmpeg()
 	if err != nil {
-		log.Fatalf("FFmpeg 检查/安装失败: %v", err)
+		log.Printf("⚠️  警告: FFmpeg 未找到: %v", err)
+		log.Printf("提示: 如果您使用 PKG 安装,请重新安装 PKG;如果开发环境,请手动安装 FFmpeg")
+		// 继续运行,但 FFmpeg 功能将不可用
+		ffmpegPath = ""
+	} else {
+		log.Printf("✅ FFmpeg 已找到: %s", ffmpegPath)
 	}
 
 	// 更新配置中的 FFmpeg 路径
