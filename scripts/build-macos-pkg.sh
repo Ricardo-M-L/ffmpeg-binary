@@ -59,10 +59,6 @@ chmod +x "$APP_PATH/Contents/MacOS/ffmpeg-binary"
 cp "scripts/uninstall.sh" "$APP_PATH/Contents/Resources/"
 chmod +x "$APP_PATH/Contents/Resources/uninstall.sh"
 
-# 复制清理监控脚本到 Resources
-cp "scripts/cleanup-watcher.sh" "$APP_PATH/Contents/Resources/"
-chmod +x "$APP_PATH/Contents/Resources/cleanup-watcher.sh"
-
 # 复制图标
 if [ -f "$ICON_FILE" ]; then
     cp "$ICON_FILE" "$APP_PATH/Contents/Resources/"
@@ -140,44 +136,9 @@ else
     echo "⚠️ 服务启动失败,请查看日志: $USER_HOME/Library/Logs/ffmpeg-binary.log"
 fi
 
-# 安装清理监控服务
-echo "安装清理监控服务..."
-
-# 创建 Application Support 目录
-SUPPORT_DIR="$USER_HOME/Library/Application Support/FFmpeg-Binary"
-sudo -u "$CURRENT_USER" mkdir -p "$SUPPORT_DIR"
-
-# 复制监控脚本到 Application Support 目录
-sudo -u "$CURRENT_USER" cp /Applications/FFmpeg-Binary.app/Contents/Resources/cleanup-watcher.sh "$SUPPORT_DIR/"
-sudo -u "$CURRENT_USER" chmod +x "$SUPPORT_DIR/cleanup-watcher.sh"
-
-# 创建 LaunchAgent plist
-cat > "$USER_HOME/Library/LaunchAgents/com.ffmpeg.binary.watcher.plist" << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.ffmpeg.binary.watcher</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>$SUPPORT_DIR/cleanup-watcher.sh</string>
-    </array>
-    <key>StartInterval</key>
-    <integer>60</integer>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>$USER_HOME/Library/Logs/ffmpeg-binary-watcher.log</string>
-    <key>StandardErrorPath</key>
-    <string>$USER_HOME/Library/Logs/ffmpeg-binary-watcher.log</string>
-</dict>
-</plist>
-EOF
-
-# 加载监控服务
-sudo -u "$CURRENT_USER" launchctl load "$USER_HOME/Library/LaunchAgents/com.ffmpeg.binary.watcher.plist" 2>/dev/null || true
-echo "✓ 监控服务已安装"
+# 修改应用包的所有权为当前用户,避免删除时需要密码
+chown -R "$CURRENT_USER:staff" /Applications/FFmpeg-Binary.app
+echo "✓ 已设置应用包权限"
 
 # 显示安装成功通知
 sudo -u "$CURRENT_USER" osascript -e 'display notification "FFmpeg Binary 已安装,拖到废纸篓即可自动卸载" with title "安装成功"' 2>/dev/null || true

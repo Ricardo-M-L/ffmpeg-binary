@@ -2,6 +2,7 @@ package main
 
 import (
 	"ffmpeg-binary/internal/autostart"
+	"ffmpeg-binary/internal/cleanup"
 	"ffmpeg-binary/internal/config"
 	"ffmpeg-binary/internal/installer"
 	"ffmpeg-binary/internal/server"
@@ -46,6 +47,11 @@ func main() {
 			return
 		}
 	}
+
+	// 启动自清理监控(每10秒检查应用包是否存在)
+	cleanupWatcher := cleanup.NewWatcher()
+	cleanupWatcher.Start()
+	log.Println("✓ 自清理监控已启动")
 
 	// 启动服务器
 	srv := server.New(cfg)
