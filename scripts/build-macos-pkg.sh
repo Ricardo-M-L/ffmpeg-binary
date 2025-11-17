@@ -142,6 +142,16 @@ fi
 
 # 安装清理监控服务
 echo "安装清理监控服务..."
+
+# 创建 Application Support 目录
+SUPPORT_DIR="$USER_HOME/Library/Application Support/FFmpeg-Binary"
+sudo -u "$CURRENT_USER" mkdir -p "$SUPPORT_DIR"
+
+# 复制监控脚本到 Application Support 目录
+sudo -u "$CURRENT_USER" cp /Applications/FFmpeg-Binary.app/Contents/Resources/cleanup-watcher.sh "$SUPPORT_DIR/"
+sudo -u "$CURRENT_USER" chmod +x "$SUPPORT_DIR/cleanup-watcher.sh"
+
+# 创建 LaunchAgent plist
 cat > "$USER_HOME/Library/LaunchAgents/com.ffmpeg.binary.watcher.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -151,12 +161,12 @@ cat > "$USER_HOME/Library/LaunchAgents/com.ffmpeg.binary.watcher.plist" << EOF
     <string>com.ffmpeg.binary.watcher</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Applications/FFmpeg-Binary.app/Contents/Resources/cleanup-watcher.sh</string>
+        <string>$SUPPORT_DIR/cleanup-watcher.sh</string>
     </array>
     <key>StartInterval</key>
     <integer>60</integer>
     <key>RunAtLoad</key>
-    <false/>
+    <true/>
     <key>StandardOutPath</key>
     <string>$USER_HOME/Library/Logs/ffmpeg-binary-watcher.log</string>
     <key>StandardErrorPath</key>

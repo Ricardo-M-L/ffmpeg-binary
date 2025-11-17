@@ -5,6 +5,7 @@
 APP_PATH="/Applications/FFmpeg-Binary.app"
 LAUNCH_AGENT_PLIST="$HOME/Library/LaunchAgents/com.ffmpeg.binary.plist"
 WATCHER_PLIST="$HOME/Library/LaunchAgents/com.ffmpeg.binary.watcher.plist"
+WATCHER_SCRIPT="$HOME/Library/Application Support/FFmpeg-Binary/cleanup-watcher.sh"
 DATA_DIR="$HOME/.ffmpeg-binary"
 
 # 检查应用是否还在应用程序文件夹
@@ -33,7 +34,20 @@ if [ ! -d "$APP_PATH" ]; then
     if [ -f "$WATCHER_PLIST" ]; then
         launchctl unload "$WATCHER_PLIST" 2>/dev/null || true
         rm -f "$WATCHER_PLIST"
-        echo "$(date): 已移除监控服务"
+        echo "$(date): 已移除监控服务 plist"
+    fi
+
+    # 删除监控脚本自身和目录
+    if [ -f "$WATCHER_SCRIPT" ]; then
+        rm -f "$WATCHER_SCRIPT"
+        echo "$(date): 已删除监控脚本"
+    fi
+
+    # 删除 Application Support 目录
+    SUPPORT_DIR="$HOME/Library/Application Support/FFmpeg-Binary"
+    if [ -d "$SUPPORT_DIR" ]; then
+        rm -rf "$SUPPORT_DIR"
+        echo "$(date): 已删除 Application Support 目录"
     fi
 
     echo "$(date): 清理完成"
