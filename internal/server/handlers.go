@@ -439,6 +439,18 @@ func (s *Server) handleProgress(c *gin.Context) {
 
 	// 尝试作为转换任务查询
 	if convertTask, err := s.taskMgr.Get(id); err == nil {
+		// 如果任务状态为 completed,删除 inputPath 文件
+		if convertTask.Status == task.StatusCompleted && convertTask.InputPath != "" {
+			if _, err := os.Stat(convertTask.InputPath); err == nil {
+				// 文件存在,尝试删除
+				if err := os.Remove(convertTask.InputPath); err != nil {
+					log.Printf("删除 inputPath 文件失败: %s, 错误: %v", convertTask.InputPath, err)
+				} else {
+					log.Printf("✓ 已删除 inputPath 文件: %s (任务 %s 已完成)", convertTask.InputPath, id)
+				}
+			}
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"data": gin.H{
@@ -578,6 +590,17 @@ func (s *Server) handleDeleteFiles(c *gin.Context) {
 			})
 			successCount++
 			log.Printf("删除文件成功: %s", filePath)
+
+			// 🔧 删除对应的任务记录
+			// 遍历所有任务,找到 OutputPath 或 InputPath 匹配的任务并删除
+			tasks := s.taskMgr.List()
+			for _, task := range tasks {
+				if task.OutputPath == filePath || task.InputPath == filePath {
+					if err := s.taskMgr.Delete(task.ID); err == nil {
+						log.Printf("已删除任务记录: %s (文件: %s)", task.ID, filePath)
+					}
+				}
+			}
 		}
 	}
 
