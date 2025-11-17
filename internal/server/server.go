@@ -1,11 +1,12 @@
 package server
 
 import (
-	"ffmpeg-binary/internal/config"
-	"ffmpeg-binary/internal/converter"
-	"ffmpeg-binary/internal/task"
-	"ffmpeg-binary/internal/upload"
 	"fmt"
+	"goalfy-mediaconverter/internal/config"
+	"goalfy-mediaconverter/internal/converter"
+	"goalfy-mediaconverter/internal/split"
+	"goalfy-mediaconverter/internal/task"
+	"goalfy-mediaconverter/internal/upload"
 	"log"
 	"net/http"
 	"time"
@@ -17,6 +18,7 @@ import (
 type Server struct {
 	config    *config.Config
 	converter *converter.Converter
+	splitter  *split.Splitter
 	taskMgr   *task.Manager
 	uploadMgr *upload.Manager
 	router    *gin.Engine
@@ -29,6 +31,7 @@ func New(cfg *config.Config) *Server {
 	s := &Server{
 		config:    cfg,
 		converter: converter.New(cfg.FFmpegPath),
+		splitter:  split.New(cfg.FFmpegPath, cfg.OutputDir),
 		taskMgr:   task.NewManager(),
 		uploadMgr: upload.NewManager(cfg.TempDir, cfg.DataDir),
 		router:    gin.Default(),
@@ -76,6 +79,14 @@ func (s *Server) setupRoutes() {
 		{
 			files.POST("/delete", s.handleDeleteFiles)
 		}
+
+		// 视频切割模块
+		splitAPI := api.Group("/split")
+		{
+			splitAPI.POST("/start", s.handleSplitStart)
+			splitAPI.GET("/download/:taskId/:segmentIndex", s.handleSplitDownload)
+			splitAPI.DELETE("/cleanup/:taskId", s.handleSplitCleanup)
+		}
 	}
 
 	// 健康检查
@@ -83,7 +94,7 @@ func (s *Server) setupRoutes() {
 		c.JSON(200, gin.H{
 			"status":    "ok",
 			"timestamp": time.Now().Format(time.RFC3339),
-			"service":   "ffmpeg-binary",
+			"service":   "goalfy-mediaconverter",
 			"version":   "1.0.0",
 		})
 	})
@@ -99,7 +110,7 @@ func (s *Server) Start() error {
 	addr := fmt.Sprintf("%s:%d", s.config.Host, port)
 
 	log.Println("\n===========================================")
-	log.Println("🚀 FFmpeg Binary 服务启动成功!")
+	log.Println("🚀 GoalfyMediaConverter 服务启动成功!")
 	log.Println("===========================================")
 	log.Printf("📡 服务地址: http://%s", addr)
 	log.Printf("📝 健康检查: http://%s/health", addr)

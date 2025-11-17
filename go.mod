@@ -1,4 +1,4 @@
-module ffmpeg-binary
+module goalfy-mediaconverter
 
 go 1.23.0
 

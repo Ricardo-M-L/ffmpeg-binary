@@ -1,12 +1,12 @@
 package main
 
 import (
-	"ffmpeg-binary/internal/autostart"
-	"ffmpeg-binary/internal/cleanup"
-	"ffmpeg-binary/internal/config"
-	"ffmpeg-binary/internal/installer"
-	"ffmpeg-binary/internal/server"
 	"fmt"
+	"goalfy-mediaconverter/internal/autostart"
+	"goalfy-mediaconverter/internal/cleanup"
+	"goalfy-mediaconverter/internal/config"
+	"goalfy-mediaconverter/internal/installer"
+	"goalfy-mediaconverter/internal/server"
 	"log"
 	"os"
 )

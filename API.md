@@ -5,6 +5,7 @@
 - [基础信息](#基础信息)
 - [上传模块](#上传模块)
 - [转换模块](#转换模块)
+- [视频切割模块](#视频切割模块)
 - [进度查询模块](#进度查询模块)
 - [文件管理模块](#文件管理模块)
 - [其他接口](#其他接口)
@@ -132,7 +133,7 @@ Content-Type: application/json
     "totalChunks": 10,
     "uploadedChunks": 10,
     "status": "merged",
-    "mergedPath": "/Users/ricardo/.ffmpeg-binary/data/550e8400-e29b-41d4-a716-446655440000.webm",
+    "mergedPath": "/Users/ricardo/.goalfy-mediaconverter/data/550e8400-e29b-41d4-a716-446655440000.webm",
     "createdAt": "2025-11-17T10:00:00+08:00",
     "updatedAt": "2025-11-17T10:05:00+08:00"
   }
@@ -205,7 +206,7 @@ Content-Type: application/json
   "message": "转换任务已启动",
   "data": {
     "taskId": "task_1234567890",
-    "inputPath": "/Users/ricardo/.ffmpeg-binary/data/video.webm",
+    "inputPath": "/Users/ricardo/.goalfy-mediaconverter/data/video.webm",
     "outputFormat": "mp4",
     "quality": "medium"
   }
@@ -231,8 +232,8 @@ Content-Type: application/json
     "taskId": "task_1234567890",
     "status": "processing",
     "progress": 65,
-    "inputPath": "/Users/ricardo/.ffmpeg-binary/data/video.webm",
-    "outputPath": "/Users/ricardo/.ffmpeg-binary/output/task_1234567890.mp4",
+    "inputPath": "/Users/ricardo/.goalfy-mediaconverter/data/video.webm",
+    "outputPath": "/Users/ricardo/.goalfy-mediaconverter/output/task_1234567890.mp4",
     "outputFormat": "mp4",
     "quality": "medium",
     "error": null,
@@ -295,8 +296,8 @@ GET /api/convert/list?status=completed&limit=20
         "taskId": "task_1234567890",
         "status": "completed",
         "progress": 100,
-        "inputPath": "/Users/ricardo/.ffmpeg-binary/data/video.webm",
-        "outputPath": "/Users/ricardo/.ffmpeg-binary/output/task_1234567890.mp4",
+        "inputPath": "/Users/ricardo/.goalfy-mediaconverter/data/video.webm",
+        "outputPath": "/Users/ricardo/.goalfy-mediaconverter/output/task_1234567890.mp4",
         "outputFormat": "mp4",
         "quality": "medium",
         "createdAt": "2025-11-17T10:10:00+08:00",
@@ -342,9 +343,189 @@ const url = URL.createObjectURL(blob);
 
 ---
 
+## 视频切割模块
+
+### 10. 开始视频切割
+
+根据删除区间切割视频,生成多个片段文件。
+
+**接口**: `POST /api/split/start`
+
+**请求头**:
+```
+Content-Type: application/json
+```
+
+**请求体**:
+```json
+{
+  "taskId": "task_1234567890",           // 必填,已转换的视频任务ID
+  "deleteIntervals": [                   // 必填,要删除的时间区间数组
+    { "start": 10, "end": 15 },         // 删除10-15秒
+    { "start": 30, "end": 45 }          // 删除30-45秒
+  ],
+  "videoDuration": 60                    // 必填,视频总时长(秒)
+}
+```
+
+**参数说明**:
+- `taskId`: 转换任务ID,系统会查找对应的 `_converted.mp4` 文件
+- `deleteIntervals`: 时间区间数组
+  - `start`: 删除开始时间(秒)
+  - `end`: 删除结束时间(秒)
+- `videoDuration`: 视频总时长,用于计算最后保留片段
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "taskId": "task_1234567890",
+  "totalSegments": 3,
+  "segments": [
+    {
+      "success": true,
+      "outputPath": "/Users/ricardo/.goalfy-mediaconverter/output/task_1234567890_part1.mp4",
+      "size": 2048000,
+      "duration": 10,
+      "startTime": 0,
+      "endTime": 10,
+      "segmentIndex": 1,
+      "fileName": "task_1234567890_part1.mp4",
+      "originalStart": 0,
+      "originalEnd": 10
+    },
+    {
+      "success": true,
+      "outputPath": "/Users/ricardo/.goalfy-mediaconverter/output/task_1234567890_part2.mp4",
+      "size": 3072000,
+      "duration": 15,
+      "startTime": 20,
+      "endTime": 35,
+      "segmentIndex": 2,
+      "fileName": "task_1234567890_part2.mp4",
+      "originalStart": 20,
+      "originalEnd": 35
+    },
+    {
+      "success": true,
+      "outputPath": "/Users/ricardo/.goalfy-mediaconverter/output/task_1234567890_part3.mp4",
+      "size": 3584000,
+      "duration": 15,
+      "startTime": 45,
+      "endTime": 60,
+      "segmentIndex": 3,
+      "fileName": "task_1234567890_part3.mp4",
+      "originalStart": 45,
+      "originalEnd": 60
+    }
+  ]
+}
+```
+
+**说明**:
+- 切割采用无损复制模式(`-c copy`),不重新编码,速度快
+- 原始的 `_converted.mp4` 文件会被自动删除以节省空间
+- 片段文件命名规则: `{taskId}_part{序号}.mp4`
+- 支持 HTTP 流媒体播放(使用 `-movflags +faststart` 优化)
+
+**错误响应**:
+```json
+{
+  "success": false,
+  "error": "未找到已转换的视频文件: task_xxx"
+}
+```
+
+---
+
+### 11. 下载视频片段
+
+下载指定的视频片段文件。
+
+**接口**: `GET /api/split/download/:taskId/:segmentIndex`
+
+**URL 参数**:
+- `taskId`: 任务ID
+- `segmentIndex`: 片段索引(从1开始)
+
+**请求示例**:
+```
+GET /api/split/download/task_1234567890/1
+```
+
+**响应**:
+- 成功时返回视频文件流 (`video/mp4`)
+- 失败时返回 JSON 错误信息
+
+**响应头**:
+```
+Content-Type: video/mp4
+Content-Disposition: attachment; filename="task_1234567890_part1.mp4"
+Accept-Ranges: bytes
+```
+
+**说明**:
+- 支持HTTP断点续传(`Accept-Ranges: bytes`)
+- 可在浏览器中直接播放
+- 使用流式传输,适合大文件
+
+**使用示例**:
+```javascript
+// 浏览器直接下载
+window.location.href = 'http://127.0.0.1:28888/api/split/download/task_1234567890/1';
+
+// 或使用 fetch
+const response = await fetch('http://127.0.0.1:28888/api/split/download/task_1234567890/1');
+const blob = await response.blob();
+const url = URL.createObjectURL(blob);
+```
+
+**错误响应**:
+```json
+{
+  "success": false,
+  "error": "未找到片段文件: task_xxx - part1"
+}
+```
+
+---
+
+### 12. 清理切割文件
+
+删除指定任务的所有切割片段文件。
+
+**接口**: `DELETE /api/split/cleanup/:taskId`
+
+**URL 参数**:
+- `taskId`: 任务ID
+
+**请求示例**:
+```
+DELETE /api/split/cleanup/task_1234567890
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "清理完成",
+  "deleted": 3
+}
+```
+
+**参数说明**:
+- `deleted`: 成功删除的文件数量
+
+**说明**:
+- 删除所有匹配 `{taskId}_part*.mp4` 的文件
+- 不会删除原始的转换文件
+- 文件不存在不会报错,只返回删除数量
+
+---
+
 ## 进度查询模块
 
-### 10. 统一进度查询
+### 13. 统一进度查询
 
 自动识别上传任务或转换任务,返回对应的进度信息。
 
@@ -381,8 +562,8 @@ const url = URL.createObjectURL(blob);
     "taskId": "task_1234567890",
     "status": "processing",
     "progress": 75,
-    "inputPath": "/Users/ricardo/.ffmpeg-binary/data/video.webm",
-    "outputPath": "/Users/ricardo/.ffmpeg-binary/output/task_1234567890.mp4",
+    "inputPath": "/Users/ricardo/.goalfy-mediaconverter/data/video.webm",
+    "outputPath": "/Users/ricardo/.goalfy-mediaconverter/output/task_1234567890.mp4",
     "outputFormat": "mp4",
     "quality": "medium",
     "createdAt": "2025-11-17T10:10:00+08:00",
@@ -414,8 +595,8 @@ Content-Type: application/json
 ```json
 {
   "filePaths": [
-    "/Users/ricardo/.ffmpeg-binary/output/task_1234567890.mp4",
-    "/Users/ricardo/.ffmpeg-binary/output/task_9876543210.mp4"
+    "/Users/ricardo/.goalfy-mediaconverter/output/task_1234567890.mp4",
+    "/Users/ricardo/.goalfy-mediaconverter/output/task_9876543210.mp4"
   ]
 }
 ```
@@ -423,9 +604,9 @@ Content-Type: application/json
 **参数说明**:
 - `filePaths`: 文件路径数组,必须是绝对路径
 - 仅允许删除以下目录下的文件:
-  - `~/.ffmpeg-binary/output/` (转换后的文件)
-  - `~/.ffmpeg-binary/data/` (合并后的上传文件)
-  - `~/.ffmpeg-binary/temp/` (临时切片文件)
+  - `~/.goalfy-mediaconverter/output/` (转换后的文件)
+  - `~/.goalfy-mediaconverter/data/` (合并后的上传文件)
+  - `~/.goalfy-mediaconverter/temp/` (临时切片文件)
 
 **响应示例**:
 ```json
@@ -438,12 +619,12 @@ Content-Type: application/json
     "failCount": 0,
     "results": [
       {
-        "filePath": "/Users/ricardo/.ffmpeg-binary/output/task_1234567890.mp4",
+        "filePath": "/Users/ricardo/.goalfy-mediaconverter/output/task_1234567890.mp4",
         "success": true,
         "message": "删除成功"
       },
       {
-        "filePath": "/Users/ricardo/.ffmpeg-binary/output/task_9876543210.mp4",
+        "filePath": "/Users/ricardo/.goalfy-mediaconverter/output/task_9876543210.mp4",
         "success": true,
         "message": "删除成功"
       }
@@ -463,12 +644,12 @@ Content-Type: application/json
     "failCount": 1,
     "results": [
       {
-        "filePath": "/Users/ricardo/.ffmpeg-binary/output/task_1234567890.mp4",
+        "filePath": "/Users/ricardo/.goalfy-mediaconverter/output/task_1234567890.mp4",
         "success": true,
         "message": "删除成功"
       },
       {
-        "filePath": "/Users/ricardo/.ffmpeg-binary/output/not_exist.mp4",
+        "filePath": "/Users/ricardo/.goalfy-mediaconverter/output/not_exist.mp4",
         "success": false,
         "message": "文件不存在"
       }
@@ -497,7 +678,7 @@ Content-Type: application/json
 {
   "status": "ok",
   "timestamp": "2025-11-17T10:30:00+08:00",
-  "service": "ffmpeg-binary",
+  "service": "goalfy-mediaconverter",
   "version": "1.0.0"
 }
 ```
@@ -630,7 +811,7 @@ await fetch(`${API_BASE}/files/delete`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    filePaths: ['/Users/ricardo/.ffmpeg-binary/output/task_xxx.mp4']
+    filePaths: ['/Users/ricardo/.goalfy-mediaconverter/output/task_xxx.mp4']
   })
 });
 ```
@@ -689,10 +870,13 @@ for (let i = 0; i < totalChunks; i++) {
 | 7 | 转换 | `/api/convert/cancel/:taskId` | POST | 取消转换任务 |
 | 8 | 转换 | `/api/convert/list` | GET | 获取转换任务列表 |
 | 9 | 转换 | `/api/convert/download/:taskId` | GET | 下载转换后的文件 |
-| 10 | 进度 | `/api/progress/:id` | GET | 统一进度查询 |
-| 11 | 文件 | `/api/files/delete` | POST | 批量删除本地文件 |
-| 12 | 其他 | `/health` | GET | 健康检查 |
-| 13 | 其他 | `/downloads/:filename` | GET | 静态文件访问 |
+| 10 | 切割 | `/api/split/start` | POST | 开始视频切割 |
+| 11 | 切割 | `/api/split/download/:taskId/:segmentIndex` | GET | 下载视频片段 |
+| 12 | 切割 | `/api/split/cleanup/:taskId` | DELETE | 清理切割文件 |
+| 13 | 进度 | `/api/progress/:id` | GET | 统一进度查询 |
+| 14 | 文件 | `/api/files/delete` | POST | 批量删除本地文件 |
+| 15 | 其他 | `/health` | GET | 健康检查 |
+| 16 | 其他 | `/downloads/:filename` | GET | 静态文件访问 |
 
 ---
 

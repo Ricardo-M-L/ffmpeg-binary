@@ -183,6 +183,17 @@ async function performConversion(task) {
         task.size = stats.size;
 
         console.log(`转换完成: ${taskId}, 输出文件大小: ${stats.size} bytes`);
+
+        // 🔧 删除原始的WebM文件（转换完成后不再需要）
+        if (await fs.pathExists(inputPath)) {
+          try {
+            await fs.remove(inputPath);
+            console.log(`✅ 已删除原始WebM文件: ${inputPath}`);
+          } catch (removeError) {
+            console.error(`⚠️ 删除原始WebM文件失败: ${inputPath}`, removeError);
+            // 不影响转换任务的状态，继续
+          }
+        }
       } catch (error) {
         console.error(`获取输出文件信息失败: ${taskId}`, error);
         task.status = 'failed';
@@ -309,4 +320,5 @@ module.exports = {
   listConvertTasks,
   cleanupExpiredTasks
 };
+
 

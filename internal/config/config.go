@@ -51,7 +51,7 @@ func Load() (*Config, error) {
 // getBaseDir 获取基础目录
 func getBaseDir() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".ffmpeg-binary")
+	return filepath.Join(home, ".goalfy-mediaconverter")
 }
 
 // Save 保存配置
@@ -67,13 +67,13 @@ func (c *Config) Save() error {
 // getDefaultDataDir 获取默认数据目录
 func getDefaultDataDir() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".ffmpeg-binary", "data")
+	return filepath.Join(home, ".goalfy-mediaconverter", "data")
 }
 
 // getConfigPath 获取配置文件路径
 func getConfigPath() string {
 	home, _ := os.UserHomeDir()
-	configDir := filepath.Join(home, ".ffmpeg-binary")
+	configDir := filepath.Join(home, ".goalfy-mediaconverter")
 	os.MkdirAll(configDir, 0755)
 	return filepath.Join(configDir, "config.json")
 }

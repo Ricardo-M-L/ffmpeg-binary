@@ -79,9 +79,9 @@ func installMacOS() error {
 		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
 	</dict>
 	<key>StandardOutPath</key>
-	<string>%s/Library/Logs/ffmpeg-binary.log</string>
+	<string>%s/Library/Logs/goalfy-mediaconverter.log</string>
 	<key>StandardErrorPath</key>
-	<string>%s/Library/Logs/ffmpeg-binary.err</string>
+	<string>%s/Library/Logs/goalfy-mediaconverter.err</string>
 </dict>
 </plist>`, exePath, home, home)
 
@@ -156,7 +156,7 @@ func installWindows() error {
 
 	// 创建快捷方式到启动文件夹
 	startupDir := filepath.Join(os.Getenv("APPDATA"), "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
-	shortcutPath := filepath.Join(startupDir, "FFmpeg Binary.lnk")
+	shortcutPath := filepath.Join(startupDir, "GoalfyMediaConverter.lnk")
 
 	// 这里需要使用 Windows API 或第三方库创建快捷方式
 	// 简化版: 提示用户手动创建
@@ -169,7 +169,7 @@ func installWindows() error {
 // uninstallWindows 卸载 Windows 自启动
 func uninstallWindows() error {
 	startupDir := filepath.Join(os.Getenv("APPDATA"), "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
-	shortcutPath := filepath.Join(startupDir, "FFmpeg Binary.lnk")
+	shortcutPath := filepath.Join(startupDir, "GoalfyMediaConverter.lnk")
 
 	return os.Remove(shortcutPath)
 }
@@ -187,7 +187,7 @@ func installLinux() error {
 		return err
 	}
 
-	servicePath := filepath.Join(systemdDir, "ffmpeg-binary.service")
+	servicePath := filepath.Join(systemdDir, "goalfy-mediaconverter.service")
 
 	exePath, err := os.Executable()
 	if err != nil {
@@ -195,7 +195,7 @@ func installLinux() error {
 	}
 
 	serviceContent := fmt.Sprintf(`[Unit]
-Description=FFmpeg Binary Service
+Description=GoalfyMediaConverter Service
 After=network.target
 
 [Service]
@@ -213,8 +213,8 @@ WantedBy=default.target
 	}
 
 	fmt.Println("systemd 服务文件已创建:", servicePath)
-	fmt.Println("启用服务: systemctl --user enable ffmpeg-binary.service")
-	fmt.Println("启动服务: systemctl --user start ffmpeg-binary.service")
+	fmt.Println("启用服务: systemctl --user enable goalfy-mediaconverter.service")
+	fmt.Println("启动服务: systemctl --user start goalfy-mediaconverter.service")
 
 	return nil
 }
@@ -226,10 +226,10 @@ func uninstallLinux() error {
 		return err
 	}
 
-	servicePath := filepath.Join(home, ".config", "systemd", "user", "ffmpeg-binary.service")
+	servicePath := filepath.Join(home, ".config", "systemd", "user", "goalfy-mediaconverter.service")
 
-	fmt.Println("停止服务: systemctl --user stop ffmpeg-binary.service")
-	fmt.Println("禁用服务: systemctl --user disable ffmpeg-binary.service")
+	fmt.Println("停止服务: systemctl --user stop goalfy-mediaconverter.service")
+	fmt.Println("禁用服务: systemctl --user disable goalfy-mediaconverter.service")
 
 	return os.Remove(servicePath)
 }

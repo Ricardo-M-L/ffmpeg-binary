@@ -1,4 +1,4 @@
-# FFmpeg Binary Service
+# GoalfyMediaConverter Service
 
 一个本地运行的视频处理服务,支持文件切片上传、WebM 到 MP4 转换和实时进度查询。
 
@@ -34,7 +34,7 @@ go run main.go
 ```
 ✅ FFmpeg 已安装: /opt/homebrew/bin/ffmpeg
 ===========================================
-🚀 FFmpeg Binary 服务启动成功!
+🚀 GoalfyMediaConverter 服务启动成功!
 ===========================================
 📡 服务地址: http://127.0.0.1:28888
 ...
@@ -58,10 +58,10 @@ go run main.go
 ./scripts/build-macos-dmg.sh
 
 # 安装
-# 1. 打开 build/macos/FFmpeg-Binary-Installer.dmg
+# 1. 打开 build/macos/GoalfyMediaConverter-Installer.dmg
 # 2. 将应用拖到 Applications 文件夹
 # 3. 运行应用安装自启动:
-/Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary install
+/Applications/GoalfyMediaConverter.app/Contents/MacOS/goalfy-mediaconverter install
 ```
 
 #### Windows
@@ -71,7 +71,7 @@ go run main.go
 ./scripts/build-windows.bat
 
 # 安装
-# 1. 复制 ffmpeg-binary.exe 到 C:\Program Files\FFmpeg-Binary\
+# 1. 复制 goalfy-mediaconverter.exe 到 C:\Program Files\GoalfyMediaConverter\
 # 2. 运行 install.bat 安装自启动
 ```
 
@@ -367,7 +367,7 @@ window.location.href = 'http://127.0.0.1:28888/api/convert/download/task_1234567
 {
   "status": "ok",
   "timestamp": "2025-11-16T15:30:00Z",
-  "service": "ffmpeg-binary",
+  "service": "goalfy-mediaconverter",
   "version": "1.0.0"
 }
 ```
@@ -458,7 +458,7 @@ window.location.href = `${API_BASE}/convert/download/${taskId}`;
 服务运行时会自动创建以下目录:
 
 ```bash
-~/.ffmpeg-binary/
+~/.goalfy-mediaconverter/
 ├── data/      # 合并后的文件
 ├── temp/      # 临时切片文件
 ├── output/    # 转换后的输出文件
@@ -467,15 +467,15 @@ window.location.href = `${API_BASE}/convert/download/${taskId}`;
 
 ### 配置文件
 
-配置文件位置: `~/.ffmpeg-binary/config.json`
+配置文件位置: `~/.goalfy-mediaconverter/config.json`
 
 ```json
 {
   "port": 28888,
   "host": "127.0.0.1",
-  "data_dir": "~/.ffmpeg-binary/data",
-  "temp_dir": "~/.ffmpeg-binary/temp",
-  "output_dir": "~/.ffmpeg-binary/output",
+  "data_dir": "~/.goalfy-mediaconverter/data",
+  "temp_dir": "~/.goalfy-mediaconverter/temp",
+  "output_dir": "~/.goalfy-mediaconverter/output",
   "ffmpeg_path": "/usr/local/bin/ffmpeg"
 }
 ```
@@ -485,7 +485,7 @@ window.location.href = `${API_BASE}/convert/download/${taskId}`;
 ## 📦 项目结构
 
 ```
-ffmpeg-binary/
+goalfy-mediaconverter/
 ├── main.go                      # 入口文件
 ├── internal/
 │   ├── config/                  # 配置管理

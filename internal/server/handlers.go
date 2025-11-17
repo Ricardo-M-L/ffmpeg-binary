@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"time"
 
-	"ffmpeg-binary/internal/task"
-	"ffmpeg-binary/internal/upload"
+	"goalfy-mediaconverter/internal/task"
+	"goalfy-mediaconverter/internal/upload"
 
 	"github.com/gin-gonic/gin"
 )

@@ -21,6 +21,7 @@ dotenv.config();
 const uploadRoutes = require('./routes/upload');
 const convertRoutes = require('./routes/convert');
 const progressRoutes = require('./routes/progress');
+const splitRoutes = require('./routes/split');
 
 // 创建Express应用
 const app = express();
@@ -55,6 +56,7 @@ const ensureDirectories = async () => {
 app.use('/api/upload', uploadRoutes);
 app.use('/api/convert', convertRoutes);
 app.use('/api/progress', progressRoutes);
+app.use('/api/split', splitRoutes);
 
 // 健康检查接口
 app.get('/health', (req, res) => {
@@ -126,4 +128,5 @@ process.on('SIGINT', async () => {
 startServer();
 
 module.exports = app;
+
 

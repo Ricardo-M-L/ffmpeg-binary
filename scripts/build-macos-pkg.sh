@@ -7,12 +7,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
-APP_NAME="FFmpeg Binary"
-BUNDLE_ID="com.ffmpeg.binary"
+APP_NAME="GoalfyMediaConverter"
+BUNDLE_ID="com.goalfy.mediaconverter"
 VERSION="1.0.0"
-INSTALL_LOCATION="/Applications/FFmpeg-Binary.app"
+INSTALL_LOCATION="/Applications/GoalfyMediaConverter.app"
 DIST_DIR="dist/macos"
-PKG_NAME="FFmpeg-Binary-Installer.pkg"
+PKG_NAME="GoalfyMediaConverter-Installer.pkg"
 ICON_FILE="assets/icons/icon.icns"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
@@ -43,7 +43,7 @@ echo "    ✅ Universal Binary 已生成"
 
 # 创建 .app 包结构
 echo "==> 创建 .app 包..."
-APP_PATH="$DIST_DIR/pkg-root/Applications/FFmpeg-Binary.app"
+APP_PATH="$DIST_DIR/pkg-root/Applications/GoalfyMediaConverter.app"
 mkdir -p "$APP_PATH/Contents/MacOS"
 mkdir -p "$APP_PATH/Contents/Resources"
 
@@ -116,7 +116,7 @@ fi
 USER_HOME=$(eval echo ~$CURRENT_USER)
 FFMPEG_INSTALL_DIR="/usr/local/bin"
 
-echo "配置 FFmpeg Binary 服务..."
+echo "配置 GoalfyMediaConverter 服务..."
 
 # 1. 检查并安装 FFmpeg (在启动服务前)
 echo "检查 FFmpeg 是否已安装..."
@@ -177,11 +177,11 @@ fi
 
 # 2. 安装自启动 (作为当前用户)
 echo "配置自启动..."
-sudo -u "$CURRENT_USER" /Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary-service install 2>/dev/null || true
+sudo -u "$CURRENT_USER" /Applications/GoalfyMediaConverter.app/Contents/MacOS/ffmpeg-binary-service install 2>/dev/null || true
 
 # 3. 启动服务 (作为当前用户)
-echo "启动 FFmpeg Binary 服务..."
-sudo -u "$CURRENT_USER" bash -c "nohup /Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary-service > '$USER_HOME/Library/Logs/ffmpeg-binary.log' 2>&1 &"
+echo "启动 GoalfyMediaConverter 服务..."
+sudo -u "$CURRENT_USER" bash -c "nohup /Applications/GoalfyMediaConverter.app/Contents/MacOS/ffmpeg-binary-service > '$USER_HOME/Library/Logs/goalfy-mediaconverter.log' 2>&1 &"
 
 # 等待服务启动
 sleep 3
@@ -190,17 +190,17 @@ sleep 3
 if lsof -i :28888 > /dev/null 2>&1; then
     echo "✓ 服务启动成功 (端口 28888 已监听)"
 elif pgrep -f "ffmpeg-binary-service" > /dev/null 2>&1; then
-    echo "⚠️ 服务进程已启动,但端口 28888 未监听,请查看日志: $USER_HOME/Library/Logs/ffmpeg-binary.log"
+    echo "⚠️ 服务进程已启动,但端口 28888 未监听,请查看日志: $USER_HOME/Library/Logs/goalfy-mediaconverter.log"
 else
-    echo "⚠️ 服务启动失败,请查看日志: $USER_HOME/Library/Logs/ffmpeg-binary.log"
+    echo "⚠️ 服务启动失败,请查看日志: $USER_HOME/Library/Logs/goalfy-mediaconverter.log"
 fi
 
 # 5. 修改应用包的所有权为当前用户,避免删除时需要密码
-chown -R "$CURRENT_USER:staff" /Applications/FFmpeg-Binary.app
+chown -R "$CURRENT_USER:staff" /Applications/GoalfyMediaConverter.app
 echo "✓ 已设置应用包权限"
 
 # 6. 显示安装成功通知
-sudo -u "$CURRENT_USER" osascript -e 'display notification "FFmpeg Binary 已安装,拖到废纸篓即可自动卸载" with title "安装成功"' 2>/dev/null || true
+sudo -u "$CURRENT_USER" osascript -e 'display notification "GoalfyMediaConverter 已安装,拖到废纸篓即可自动卸载" with title "安装成功"' 2>/dev/null || true
 
 exit 0
 POSTINSTALL
@@ -239,8 +239,8 @@ cat > "$DIST_DIR/resources/welcome.html" << 'WELCOME'
     </style>
 </head>
 <body>
-    <h1>欢迎安装 FFmpeg Binary 服务</h1>
-    <p>FFmpeg Binary 是一个本地视频转换服务,提供 WebM 到 MP4 的转换功能。</p>
+    <h1>欢迎安装 GoalfyMediaConverter</h1>
+    <p>GoalfyMediaConverter 是一个本地视频转换服务,提供 WebM 到 MP4 的转换功能。</p>
 
     <h3>主要功能:</h3>
     <div class="feature">✓ 同步视频流转换</div>
@@ -294,13 +294,13 @@ cat > "$DIST_DIR/resources/conclusion.html" << 'CONCLUSION'
 </head>
 <body>
     <h1>安装完成!</h1>
-    <p>FFmpeg Binary 服务已成功安装。</p>
+    <p>GoalfyMediaConverter 已成功安装。</p>
 
     <div class="info">
         <h3>服务信息:</h3>
         <p>🌐 服务地址: <strong>http://127.0.0.1:28888</strong><br>
            📊 健康检查: <strong>http://127.0.0.1:28888/health</strong><br>
-           📁 日志文件: <strong>~/Library/Logs/ffmpeg-binary.log</strong></p>
+           📁 日志文件: <strong>~/Library/Logs/goalfy-mediaconverter.log</strong></p>
     </div>
 
     <h3>使用方法:</h3>
@@ -308,11 +308,11 @@ cat > "$DIST_DIR/resources/conclusion.html" << 'CONCLUSION'
 
     <h3>卸载方法:</h3>
     <p><strong>只需拖到废纸篓即可!</strong></p>
-    <p>直接将 FFmpeg-Binary.app 从"应用程序"或启动台拖到废纸篓,系统会在 1 分钟内自动清理所有相关文件和服务,包括:</p>
+    <p>直接将 GoalfyMediaConverter.app 从"应用程序"或启动台拖到废纸篓,系统会在 1 分钟内自动清理所有相关文件和服务,包括:</p>
     <ul>
         <li>✓ 停止运行中的服务进程</li>
         <li>✓ 移除自启动配置</li>
-        <li>✓ 清理数据目录 (~/.ffmpeg-binary)</li>
+        <li>✓ 清理数据目录 (~/.goalfy-mediaconverter)</li>
     </ul>
     <p><small>💡 提示:拖到废纸篓后约 1 分钟内自动清理完成,无需清空废纸篓</small></p>
 </body>
@@ -337,7 +337,7 @@ echo "==> 创建 Distribution 定义..."
 cat > "$DIST_DIR/distribution.xml" << EOF
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="1">
-    <title>FFmpeg Binary</title>
+    <title>GoalfyMediaConverter</title>
     <background file="background.png" alignment="bottomleft" scaling="proportional"/>
     <welcome file="welcome.html"/>
     <conclusion file="conclusion.html"/>

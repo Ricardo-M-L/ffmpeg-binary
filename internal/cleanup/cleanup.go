@@ -9,12 +9,12 @@ import (
 )
 
 const (
-	appPath          = "/Applications/FFmpeg-Binary.app"
+	appPath          = "/Applications/GoalfyMediaConverter.app"
 	checkInterval    = 10 * time.Second // 每10秒检查一次
-	launchAgentPath  = "Library/LaunchAgents/com.ffmpeg.binary.plist"
-	watcherAgentPath = "Library/LaunchAgents/com.ffmpeg.binary.watcher.plist"
-	dataDir          = ".ffmpeg-binary"
-	supportDir       = "Library/Application Support/FFmpeg-Binary"
+	launchAgentPath  = "Library/LaunchAgents/com.goalfy.mediaconverter.plist"
+	watcherAgentPath = "Library/LaunchAgents/com.goalfy.mediaconverter.watcher.plist"
+	dataDir          = ".goalfy-mediaconverter"
+	supportDir       = "Library/Application Support/GoalfyMediaConverter"
 )
 
 // Watcher 自清理监控器
@@ -72,7 +72,7 @@ func (w *Watcher) checkAndCleanup() {
 		return
 	}
 
-	trashPath := filepath.Join(homeDir, ".Trash", "FFmpeg-Binary.app")
+	trashPath := filepath.Join(homeDir, ".Trash", "GoalfyMediaConverter.app")
 	_, err = os.Stat(trashPath)
 	inTrash := err == nil
 
