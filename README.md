@@ -11,8 +11,11 @@
 - ✅ **开机自启**: 支持 macOS/Windows/Linux 自启动
 - ✅ **本地服务**: 仅监听 127.0.0.1,安全可靠
 - ✅ **完全兼容**: 接口 100% 兼容 video-service (Node.js 版本)
+- 🆕 **FFmpeg 自动安装**: 自动检测并安装 FFmpeg,无需手动配置
 
 ## 🚀 快速开始
+
+> 🆕 **无需手动安装 FFmpeg!** 服务会自动检测并安装 FFmpeg,详见 [FFmpeg 自动安装说明](./FFMPEG_AUTO_INSTALL.md)
 
 ### 开发环境运行
 
@@ -20,10 +23,30 @@
 # 安装依赖
 go mod download
 
-# 运行服务
+# 运行服务(会自动检测/安装 FFmpeg)
 go run main.go
 
 # 服务启动在 http://127.0.0.1:28888
+```
+
+**首次启动日志示例:**
+
+```
+✅ FFmpeg 已安装: /opt/homebrew/bin/ffmpeg
+===========================================
+🚀 FFmpeg Binary 服务启动成功!
+===========================================
+📡 服务地址: http://127.0.0.1:28888
+...
+```
+
+或如果未安装:
+
+```
+⚠️  FFmpeg 未安装或不可用,正在自动安装...
+📦 正在通过 Homebrew 安装 FFmpeg...
+[安装进度...]
+✅ FFmpeg 安装成功: /opt/homebrew/bin/ffmpeg
 ```
 
 ### 生产环境部署
@@ -467,6 +490,7 @@ ffmpeg-binary/
 ├── internal/
 │   ├── config/                  # 配置管理
 │   ├── converter/               # FFmpeg 转换器
+│   ├── installer/               # 🆕 FFmpeg 自动安装器
 │   ├── task/                    # 转换任务管理
 │   ├── upload/                  # 上传任务管理
 │   ├── server/                  # HTTP 服务器
@@ -482,8 +506,9 @@ ffmpeg-binary/
 
 ## 🔗 相关链接
 
+- [FFmpeg 自动安装说明](./FFMPEG_AUTO_INSTALL.md) 🆕
 - [快速开始指南](./QUICKSTART.md)
-- [构建文档](./docs/BUILD.md)
+- [API 接口文档](./API.md)
 - [接口测试示例](./examples/demo.html)
 
 ---

@@ -506,6 +506,95 @@ func (s *Server) processConvertTask(t *task.Task) {
 	}
 }
 
+// ==================== 文件管理模块 ====================
+
+// handleDeleteFiles 批量删除本地文件
+// POST /api/files/delete
+func (s *Server) handleDeleteFiles(c *gin.Context) {
+	var req struct {
+		FilePaths []string `json:"filePaths" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "缺少必要参数: filePaths",
+		})
+		return
+	}
+
+	if len(req.FilePaths) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "filePaths 不能为空",
+		})
+		return
+	}
+
+	// 删除结果
+	results := make([]gin.H, 0, len(req.FilePaths))
+	successCount := 0
+	failCount := 0
+
+	for _, filePath := range req.FilePaths {
+		// 检查文件是否存在
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			results = append(results, gin.H{
+				"filePath": filePath,
+				"success":  false,
+				"message":  "文件不存在",
+			})
+			failCount++
+			continue
+		}
+
+		// 安全检查:只允许删除 output 目录下的文件
+		if !filepath.HasPrefix(filePath, s.config.OutputDir) &&
+			!filepath.HasPrefix(filePath, s.config.DataDir) &&
+			!filepath.HasPrefix(filePath, s.config.TempDir) {
+			results = append(results, gin.H{
+				"filePath": filePath,
+				"success":  false,
+				"message":  "无权限删除此文件(仅允许删除 output/data/temp 目录下的文件)",
+			})
+			failCount++
+			continue
+		}
+
+		// 删除文件
+		if err := os.Remove(filePath); err != nil {
+			results = append(results, gin.H{
+				"filePath": filePath,
+				"success":  false,
+				"message":  fmt.Sprintf("删除失败: %v", err),
+			})
+			failCount++
+			log.Printf("删除文件失败: %s, 错误: %v", filePath, err)
+		} else {
+			results = append(results, gin.H{
+				"filePath": filePath,
+				"success":  true,
+				"message":  "删除成功",
+			})
+			successCount++
+			log.Printf("删除文件成功: %s", filePath)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": fmt.Sprintf("处理完成: 成功 %d 个,失败 %d 个", successCount, failCount),
+		"data": gin.H{
+			"total":        len(req.FilePaths),
+			"successCount": successCount,
+			"failCount":    failCount,
+			"results":      results,
+		},
+	})
+}
+
+// ==================== 辅助函数 ====================
+
 // generateTaskID 生成任务ID
 func generateTaskID() string {
 	return fmt.Sprintf("task_%d", timeNow().UnixNano())

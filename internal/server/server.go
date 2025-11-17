@@ -70,6 +70,12 @@ func (s *Server) setupRoutes() {
 		{
 			progress.GET("/:id", s.handleProgress)
 		}
+
+		// 文件管理模块
+		files := api.Group("/files")
+		{
+			files.POST("/delete", s.handleDeleteFiles)
+		}
 	}
 
 	// 健康检查
@@ -88,11 +94,6 @@ func (s *Server) setupRoutes() {
 
 // Start 启动服务器
 func (s *Server) Start() error {
-	// 验证 FFmpeg
-	if err := s.converter.Validate(); err != nil {
-		return err
-	}
-
 	// 使用固定端口
 	port := s.config.Port
 	addr := fmt.Sprintf("%s:%d", s.config.Host, port)
