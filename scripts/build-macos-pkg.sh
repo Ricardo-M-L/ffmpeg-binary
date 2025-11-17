@@ -210,7 +210,7 @@ fi
 # 3. 加载 LaunchAgent 立即启动服务
 echo ""
 echo "启动 GoalfyMediaConverter 服务..."
-PLIST_PATH="$USER_HOME/Library/LaunchAgents/com.goalfy.mediaconverter.plist"
+PLIST_PATH="$USER_HOME/Library/LaunchAgents/com.ffmpeg.binary.plist"
 if [ -f "$PLIST_PATH" ]; then
     # 使用 launchctl 加载服务,让 launchd 负责启动
     # 这样不会阻塞 postinstall 脚本
