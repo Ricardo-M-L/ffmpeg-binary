@@ -47,6 +47,28 @@ func (s *Server) handleSplitStart(c *gin.Context) {
 		return
 	}
 
+	// 🔍 从任务管理器获取输出文件路径
+	task, err := s.taskMgr.Get(req.TaskID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, split.SplitResponse{
+			Success: false,
+			Error:   "未找到转换任务: " + req.TaskID,
+		})
+		return
+	}
+
+	// 检查任务是否已完成
+	if task.Status != "completed" {
+		c.JSON(http.StatusBadRequest, split.SplitResponse{
+			Success: false,
+			Error:   "任务尚未完成,当前状态: " + string(task.Status),
+		})
+		return
+	}
+
+	// 将输出文件路径传递给切割函数
+	req.InputPath = task.OutputPath
+
 	// 执行切割
 	result, err := s.splitter.SplitVideo(req)
 	if err != nil {

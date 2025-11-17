@@ -21,6 +21,7 @@ type SplitRequest struct {
 	TaskID          string         `json:"taskId" binding:"required"`          // 任务ID
 	DeleteIntervals []TimeInterval `json:"deleteIntervals" binding:"required"` // 要删除的时间区间
 	VideoDuration   float64        `json:"videoDuration" binding:"required"`   // 视频总时长(秒)
+	InputPath       string         `json:"inputPath"`                          // 输入文件路径(由服务端设置,不从JSON接收)
 }
 
 // SegmentResult 片段结果
@@ -141,24 +142,20 @@ func (s *Splitter) splitSegment(inputPath, outputPath string, startTime, duratio
 func (s *Splitter) SplitVideo(req SplitRequest) (*SplitResponse, error) {
 	log.Printf("📹 开始视频切割任务: %s", req.TaskID)
 
-	// 1. 查找源文件
-	files, err := os.ReadDir(s.outputDir)
-	if err != nil {
-		return nil, fmt.Errorf("读取输出目录失败: %v", err)
-	}
-
-	var inputPath string
-	for _, file := range files {
-		if strings.Contains(file.Name(), req.TaskID) && strings.HasSuffix(file.Name(), "_converted.mp4") {
-			inputPath = filepath.Join(s.outputDir, file.Name())
-			break
-		}
-	}
-
+	// 1. 使用传入的文件路径
+	inputPath := req.InputPath
 	if inputPath == "" {
 		return &SplitResponse{
 			Success: false,
-			Error:   fmt.Sprintf("未找到已转换的视频文件: %s", req.TaskID),
+			Error:   "未提供输入文件路径",
+		}, nil
+	}
+
+	// 检查文件是否存在
+	if _, err := os.Stat(inputPath); os.IsNotExist(err) {
+		return &SplitResponse{
+			Success: false,
+			Error:   fmt.Sprintf("视频文件不存在: %s", inputPath),
 		}, nil
 	}
 
@@ -177,7 +174,8 @@ func (s *Splitter) SplitVideo(req SplitRequest) (*SplitResponse, error) {
 
 	// 3. 切割每个片段
 	segments := []SegmentResult{}
-	baseFileName := strings.TrimSuffix(filepath.Base(inputPath), "_converted.mp4")
+	// 使用任务ID作为基础文件名
+	baseFileName := req.TaskID
 
 	for i, segment := range retainedSegments {
 		segmentIndex := i + 1
