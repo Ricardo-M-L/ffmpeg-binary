@@ -27,7 +27,6 @@
 ```bash
 # 1. 同步 vendor 依赖 (重要!)
 
-
 # 2. 执行打包
 ./scripts/build-macos-pkg.sh
 ```
