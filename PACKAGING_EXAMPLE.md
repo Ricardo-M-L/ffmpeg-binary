@@ -92,109 +92,108 @@
 
 ---
 
-## 🪟 步骤 3: 打包 Windows 安装包 (生产就绪)
+## 🪟 步骤 3: 打包 Windows 安装包 (生产就绪) - ✨ Windows 服务版本
 
-### 准备工作 (首次需要)
+### 🚀 在 Mac 上一键打包 Windows 安装包!
 
-**安装 Inno Setup**:
+**无需 Windows 机器,直接在 Mac 上完成!**
 
-1. 下载 Inno Setup 6.0+: https://jrsoftware.org/isdl.php
-2. 安装到默认位置: `C:\Program Files (x86)\Inno Setup 6\`
-3. 完成安装
-
-> **提示**: Inno Setup 是免费开源的专业 Windows 安装包制作工具,被广泛使用(如 VS Code、Python 等)
-
-### 执行打包
-
-在 Windows 命令提示符(CMD)或 PowerShell 中执行:
-
-```batch
-REM 进入项目目录
-cd C:\path\to\ffmpeg-binary
-
-REM 同步依赖
-go mod vendor
-
-REM 执行打包
-scripts\build-windows.bat
+```bash
+# 在 Mac 上执行 (需要 Docker)
+./scripts/build-windows-on-mac.sh
 ```
 
 **输出:**
 ```
 ╔══════════════════════════════════════════════════════════════╗
-║           Windows 安装包构建工具                            ║
+║     Windows 安装包构建工具 (Mac - 使用 NSIS)               ║
 ╚══════════════════════════════════════════════════════════════╝
 
 ==> 清理旧文件...
+==> 检查 Docker 镜像...
+    ✅ Docker 镜像已存在
 ==> 编译 Windows 可执行文件...
     架构: amd64
     ✅ 可执行文件已生成
-==> 创建安装包...
+==> 创建安装包 (使用 NSIS)...
     ✅ 安装包已创建
 
 ╔══════════════════════════════════════════════════════════════╗
 ║                 ✅ 打包完成!                                ║
 ╚══════════════════════════════════════════════════════════════╝
 
-📦 安装包: dist\windows\GoalfyMediaConverter-Setup.exe
+📦 安装包: dist/windows/GoalfyMediaConverter-Setup.exe (3.6MB)
 
 功能特性:
-  ✅ 图形化安装界面
-  ✅ 自动下载并安装 FFmpeg
-  ✅ 开机自启动 (可选)
-  ✅ 自动启动服务
+  ✅ 图形化安装界面 (NSIS)
+  ✅ Windows 服务模式 (无黑窗口)
+  ✅ 开机自动启动
+  ✅ 后台静默运行
   ✅ 标准卸载程序
   ✅ 添加到"添加/删除程序"
 ```
 
-### 用户安装体验 (像 QQ、微信那样)
+> **提示**: 首次打包需要构建 Docker 镜像(2-3分钟),之后只需 30 秒!
+
+### ✨ 新版本特性 - Windows 服务
+
+安装后程序将作为 **Windows 服务**运行,完全解决黑窗口问题:
+
+- ✅ **无黑色控制台窗口** - 完全后台运行
+- ✅ **开机自动启动** - 像系统服务一样
+- ✅ **专业的服务管理** - 通过 services.msc 控制
+- ✅ **一键安装** - 用户体验极佳
+
+### 用户安装体验 (像 QQ、微信、网易云音乐那样!)
 
 1. 用户双击 `GoalfyMediaConverter-Setup.exe`
 2. 打开标准的 Windows 安装向导界面,显示:
-   - **欢迎页面**: 介绍产品和系统要求
-   - **许可协议**: 显示软件许可证
-   - **安装位置**: 默认 `C:\Program Files\GoalfyMediaConverter\`
-   - **附加任务**: 可选"开机自启动"
-   - **安装进度**: 显示安装进度(自动下载 FFmpeg)
+   - **欢迎页面**: 介绍产品功能
+   - **选择安装位置**: 默认 `C:\Program Files\GoalfyMediaConverter\`
+   - **安装进度**: 显示安装进度
    - **完成页面**: 显示安装成功信息
-3. 点击"下一步" → "我接受" → "安装" → 完成
+3. 点击"下一步" → "安装" → 完成
 4. **安装过程自动完成以下操作:**
    - ✅ 安装应用到 Program Files
-   - ✅ 自动下载并安装 FFmpeg 静态二进制
-   - ✅ 配置开机自启动(如果用户勾选)
-   - ✅ 立即启动后台服务
+   - ✅ 安装为 Windows 服务
+   - ✅ 设置开机自动启动
+   - ✅ 立即启动服务
+   - ✅ 创建开始菜单快捷方式
    - ✅ 添加到"添加/删除程序"
-5. **服务自动在后台运行**
-6. 服务地址: http://127.0.0.1:28888
-7. **卸载**: 在"添加/删除程序"中卸载,自动清理所有文件!
+5. **❌ 没有黑色窗口出现!**
+6. **✅ 服务在后台静默运行**
+7. 服务地址: http://127.0.0.1:28888
+8. **卸载**: 在"添加/删除程序"中卸载,自动停止并删除服务!
+
+### 🎯 服务管理
+
+#### 开始菜单快捷方式
+
+安装后在开始菜单 "GoalfyMediaConverter" 文件夹中:
+
+1. **启动服务.bat** - 手动启动服务
+2. **停止服务.bat** - 停止服务
+3. **查看服务状态.bat** - 查看运行状态
+4. **打开服务管理器.bat** - 打开 Windows 服务管理器
+5. **打开Web界面.url** - 访问 http://127.0.0.1:28888
+6. **卸载** - 卸载程序
+
+#### 使用 Windows 服务管理器
+
+1. 按 `Win + R`,输入 `services.msc`,回车
+2. 找到 "**Goalfy Media Converter Service**"
+3. 可以启动/停止服务,设置启动类型
 
 ### 生产级特性
 
-- ✅ 真正的图形化安装界面 (Windows 标准安装向导)
-- ✅ 符合 Windows 标准安装体验
-- ✅ 自动下载 FFmpeg (从 GitHub 获取最新版本)
-- ✅ 自动配置开机自启动 (用户可选)
-- ✅ 固定端口 28888
-- ✅ 支持 64 位 Windows 10/11
-- ✅ 标准卸载程序 (在"添加/删除程序"中)
-- ✅ 完整的安装日志 (`%USERPROFILE%\AppData\Local\GoalfyMediaConverter\install.log`)
-
-### 如果没有安装 Inno Setup
-
-脚本会提示并仅生成可执行文件:
-
-```
-⚠️  未找到 Inno Setup
-
-请按以下步骤操作:
-
-1. 下载 Inno Setup 6.0+: https://jrsoftware.org/isdl.php
-2. 安装到默认位置: C:\Program Files (x86)\Inno Setup 6\
-3. 重新运行此脚本
-
-=== 当前仅生成可执行文件 ===
-可执行文件: build\windows\ffmpeg-binary.exe
-```
+- ✅ **真正的图形化安装界面** (NSIS 标准安装向导)
+- ✅ **Windows 服务模式** - 无黑窗口,后台运行
+- ✅ **开机自动启动** - 服务自动配置为 Auto Start
+- ✅ **专业的服务管理** - 符合 Windows 服务标准
+- ✅ **固定端口 28888**
+- ✅ **支持 64 位 Windows 10/11**
+- ✅ **标准卸载程序** (自动停止并删除服务)
+- ✅ **在 Mac 上打包** - 无需 Windows 机器!
 
 ---
 
@@ -282,20 +281,20 @@ open dist/macos/GoalfyMediaConverter-Installer.pkg
 
 ### Windows 打包
 
-在 Windows 上执行:
+**在 Mac 上执行 (推荐!):**
 
-```batch
-REM 1. 同步 vendor 依赖 (重要!)
-go mod vendor
+```bash
+# 1. 确保 Docker 已安装并运行
+docker --version
 
-REM 2. 打包(需要先安装 Inno Setup)
-scripts\build-windows.bat
+# 2. 一键打包 (自动处理依赖)
+./scripts/build-windows-on-mac.sh
 
-REM 3. 验证
-dist\windows\GoalfyMediaConverter-Setup.exe
+# 3. 验证
+ls -lh dist/windows/GoalfyMediaConverter-Setup.exe
 ```
 
-> **注意**: 首次打包前需要安装 Inno Setup,详见上方"步骤 3: 打包 Windows 安装包"
+> **提示**: 无需 Windows 机器!使用 Docker 在 Mac 上交叉编译,支持 ARM64 (Apple Silicon)
 
 ### Linux 打包
 
@@ -433,9 +432,9 @@ make all
 
 现在你有了:
 - 美观的应用图标
-- 专业的 macOS PKG 安装包
-- 基础的 Windows 安装器
+- 专业的 macOS PKG 安装包 (后台运行,无终端窗口)
+- **专业的 Windows 服务安装包** (在 Mac 上打包,后台运行,无黑窗口!)
 - 标准的 Linux 软件包
 - 完整的文档
 
-用户可以轻松安装并使用你的服务!
+用户可以轻松安装并使用你的服务,就像使用 **QQ、微信、网易云音乐**一样专业! 🎊

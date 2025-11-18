@@ -1,7 +1,7 @@
 # Windows 打包环境 - 轻量版
 # 使用 NSIS (原生 Linux 工具,无需 Wine)
 
-FROM golang:1.23-bullseye
+FROM golang:1.24-bullseye
 
 # 安装 NSIS (原生支持 Linux/ARM64)
 RUN apt-get update && \

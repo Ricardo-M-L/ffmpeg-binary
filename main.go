@@ -9,9 +9,21 @@ import (
 	"goalfy-mediaconverter/internal/server"
 	"log"
 	"os"
+	"runtime"
 )
 
 func main() {
+	// Windows 平台检查是否作为服务运行
+	if runtime.GOOS == "windows" {
+		runAsWindowsService()
+		return
+	}
+
+	// 非 Windows 平台或控制台模式
+	runAsConsole()
+}
+
+func runAsConsole() {
 	// 加载配置
 	cfg, err := config.Load()
 	if err != nil {
