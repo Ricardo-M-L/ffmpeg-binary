@@ -7,12 +7,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
-APP_NAME="FFmpeg Binary"
-BUNDLE_ID="com.ffmpeg.binary"
+APP_NAME="GoalfyMediaConverter"
+BUNDLE_ID="com.goalfy.mediaconverter"
 VERSION="1.0.0"
-INSTALL_LOCATION="/Applications/FFmpeg-Binary.app"
+INSTALL_LOCATION="/Applications/GoalfyMediaConverter.app"
 DIST_DIR="dist/macos"
-PKG_NAME="FFmpeg-Binary-Installer.pkg"
+PKG_NAME="GoalfyMediaConverter-Installer.pkg"
 ICON_FILE="assets/icons/icon.icns"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
@@ -43,18 +43,27 @@ echo "    ✅ Universal Binary 已生成"
 
 # 创建 .app 包结构
 echo "==> 创建 .app 包..."
-APP_PATH="$DIST_DIR/pkg-root/Applications/FFmpeg-Binary.app"
+APP_PATH="$DIST_DIR/pkg-root/Applications/GoalfyMediaConverter.app"
 mkdir -p "$APP_PATH/Contents/MacOS"
 mkdir -p "$APP_PATH/Contents/Resources"
 
-# 复制可执行文件
-cp "$DIST_DIR/ffmpeg-binary" "$APP_PATH/Contents/MacOS/"
+# 复制可执行文件和 GUI 启动器
+cp "$DIST_DIR/ffmpeg-binary" "$APP_PATH/Contents/MacOS/ffmpeg-binary-service"
+chmod +x "$APP_PATH/Contents/MacOS/ffmpeg-binary-service"
+
+# 复制 GUI 启动器作为主可执行文件
+cp "scripts/gui-launcher.sh" "$APP_PATH/Contents/MacOS/ffmpeg-binary"
 chmod +x "$APP_PATH/Contents/MacOS/ffmpeg-binary"
+
+# 复制卸载脚本到 Resources
+cp "scripts/uninstall.sh" "$APP_PATH/Contents/Resources/"
+chmod +x "$APP_PATH/Contents/Resources/uninstall.sh"
 
 # 复制图标
 if [ -f "$ICON_FILE" ]; then
     cp "$ICON_FILE" "$APP_PATH/Contents/Resources/"
-    ICON_ENTRY="    <key>CFBundleIconFile</key>\n    <string>icon.icns</string>"
+    ICON_ENTRY="    <key>CFBundleIconFile</key>
+    <string>icon.icns</string>"
 else
     echo "    ⚠️  图标文件不存在"
     ICON_ENTRY=""
@@ -83,10 +92,10 @@ cat > "$APP_PATH/Contents/Info.plist" << EOF
 $ICON_ENTRY
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
-    <key>LSUIElement</key>
-    <true/>
     <key>NSHighResolutionCapable</key>
-    <true/>
+    <string>true</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.utilities</string>
 </dict>
 </plist>
 EOF
@@ -105,71 +114,148 @@ if [ -z "$CURRENT_USER" ]; then
 fi
 
 USER_HOME=$(eval echo ~$CURRENT_USER)
+FFMPEG_INSTALL_DIR="/usr/local/bin"
+LOG_FILE="$USER_HOME/Library/Logs/goalfy-mediaconverter-install.log"
 
-echo "配置 FFmpeg Binary 服务..."
+# 确保日志目录存在
+mkdir -p "$USER_HOME/Library/Logs"
 
-# 检查 FFmpeg 是否安装
-FFMPEG_CHECK=0
-if command -v ffmpeg &> /dev/null; then
-    FFMPEG_CHECK=1
-    echo "✓ FFmpeg 已安装"
-else
-    echo "⚠️  FFmpeg 未安装"
-fi
+# 重定向所有输出到日志文件
+exec > >(tee -a "$LOG_FILE") 2>&1
 
-# 安装自启动 (作为当前用户)
-sudo -u "$CURRENT_USER" /Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary install 2>/dev/null || true
+echo "========================================="
+echo "GoalfyMediaConverter 安装脚本"
+echo "开始时间: $(date)"
+echo "========================================="
+echo ""
 
-# 只有在 FFmpeg 已安装的情况下才启动服务
-if [ $FFMPEG_CHECK -eq 1 ]; then
-    # 启动服务 (作为当前用户)
-    sudo -u "$CURRENT_USER" nohup /Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary > "$USER_HOME/Library/Logs/ffmpeg-binary.log" 2>&1 &
+echo "配置 GoalfyMediaConverter 服务..."
 
-    # 等待服务启动
-    sleep 2
+# 1. 检查并安装 FFmpeg (在启动服务前)
+echo "检查 FFmpeg 是否已安装..."
+if ! command -v ffmpeg &> /dev/null; then
+    echo "⚠️  FFmpeg 未安装,正在下载静态编译版本..."
 
-    # 检查服务是否真的启动了
-    if pgrep -f "ffmpeg-binary" > /dev/null; then
-        # 服务成功启动
-        sudo -u "$CURRENT_USER" osascript << 'APPLESCRIPT' 2>/dev/null || true
-display dialog "FFmpeg Binary 安装成功!
+    # 检测 CPU 架构
+    ARCH=$(uname -m)
+    echo "检测到 CPU 架构: $ARCH"
 
-✅ 服务已启动并设置为开机自启
-📁 日志文件: ~/Library/Logs/ffmpeg-binary.log
-🌐 服务地址: http://127.0.0.1:18888
+    # evermeet.cx 只提供 x86_64 版本,需要 Rosetta 2 在 Apple Silicon 上运行
+    # 先检查是否有 Rosetta 2 (对于 Apple Silicon Mac)
+    if [ "$ARCH" = "arm64" ]; then
+        echo "检测到 Apple Silicon Mac"
+        if ! /usr/bin/pgrep -q oahd; then
+            echo "⚠️  未检测到 Rosetta 2,正在安装..."
+            # 静默安装 Rosetta 2
+            /usr/sbin/softwareupdate --install-rosetta --agree-to-license 2>&1 | tee -a "$LOG_FILE" || true
+            sleep 2
+        else
+            echo "✓ Rosetta 2 已安装"
+        fi
+    fi
 
-服务将在后台运行,不会显示任何窗口。" buttons {"好的"} default button 1 with title "安装成功" with icon note
-APPLESCRIPT
+    # 使用 evermeet.cx 的 x86_64 版本 (会通过 Rosetta 2 在 Apple Silicon 上运行)
+    FFMPEG_URL="https://evermeet.cx/ffmpeg/getrelease/zip"
+    echo "下载 FFmpeg (x86_64 版本,支持所有 Mac 通过 Rosetta 2)"
+
+    # 下载到临时目录
+    TMP_DIR=$(mktemp -d)
+    echo "下载 FFmpeg (可能需要几分钟,取决于网络速度)..."
+
+    # 添加超时参数防止卡死:
+    # --connect-timeout 30: 连接超时 30 秒
+    # --max-time 300: 总下载时间不超过 5 分钟
+    # -S: 显示错误信息
+    # --retry 2: 失败时重试 2 次
+    # --retry-delay 3: 重试间隔 3 秒
+    if ! curl -L -S --connect-timeout 30 --max-time 300 --retry 2 --retry-delay 3 -o "$TMP_DIR/ffmpeg.zip" "$FFMPEG_URL"; then
+        echo "❌ FFmpeg 下载失败 (可能是网络问题或下载超时)"
+        echo "   您可以稍后手动安装 FFmpeg: brew install ffmpeg"
+        echo "   或从 https://evermeet.cx/ffmpeg/ 下载安装"
+        rm -rf "$TMP_DIR"
+        # 下载失败不阻止安装继续,让用户可以手动安装 FFmpeg
+        echo "⚠️ 跳过 FFmpeg 安装,继续配置服务..."
     else
-        # 服务启动失败
-        sudo -u "$CURRENT_USER" osascript << 'APPLESCRIPT' 2>/dev/null || true
-display dialog "FFmpeg Binary 已安装,但服务启动失败。
+        echo "✓ FFmpeg 下载完成"
 
-请查看日志文件获取详细信息:
-~/Library/Logs/ffmpeg-binary.log
+        # 解压 ZIP 文件 (macOS 自带 unzip)
+        echo "解压 FFmpeg..."
+        cd "$TMP_DIR"
+        unzip -q ffmpeg.zip
 
-您可以稍后手动启动服务:
-/Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary" buttons {"好的"} default button 1 with title "安装警告" with icon caution
-APPLESCRIPT
+        # 安装到系统目录 (postinstall 已经是 root 权限,可以直接复制)
+        if [ -f "ffmpeg" ]; then
+            echo "安装 FFmpeg 到 $FFMPEG_INSTALL_DIR..."
+
+            # 确保目录存在
+            mkdir -p "$FFMPEG_INSTALL_DIR"
+
+            # 直接复制 (已经是 root 权限)
+            cp -f ffmpeg "$FFMPEG_INSTALL_DIR/ffmpeg"
+
+            # 设置执行权限
+            chmod 755 "$FFMPEG_INSTALL_DIR/ffmpeg"
+
+            echo "✓ FFmpeg 安装成功"
+        else
+            echo "❌ FFmpeg 解压失败"
+            rm -rf "$TMP_DIR"
+            echo "⚠️ 跳过 FFmpeg 安装,继续配置服务..."
+        fi
+
+        # 清理临时文件
+        rm -rf "$TMP_DIR"
     fi
 else
-    # FFmpeg 未安装,显示提示
-    sudo -u "$CURRENT_USER" osascript << 'APPLESCRIPT' 2>/dev/null || true
-display dialog "FFmpeg Binary 已安装,但需要先安装 FFmpeg 才能使用。
-
-请在终端中运行以下命令安装 FFmpeg:
-brew install ffmpeg
-
-安装 FFmpeg 后,服务将在下次登录时自动启动。
-
-或者现在手动启动:
-/Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary" buttons {"打开终端", "稍后安装"} default button 2 with title "需要安装 FFmpeg" with icon caution giving up after 30
-set buttonReturned to button returned of result
-if buttonReturned is "打开终端" then
-    do shell script "open -a Terminal"
-end if
-APPLESCRIPT
+    echo "✓ FFmpeg 已安装: $(which ffmpeg)"
 fi
+
+# 2. 安装自启动配置 (只安装,不立即启动)
+echo ""
+echo "配置自启动..."
+if sudo -u "$CURRENT_USER" /Applications/GoalfyMediaConverter.app/Contents/MacOS/ffmpeg-binary-service install 2>&1 | tee -a "$LOG_FILE"; then
+    echo "✓ 自启动配置已安装"
+else
+    echo "⚠️ 自启动配置失败,请查看日志"
+fi
+
+# 3. 加载 LaunchAgent 立即启动服务
+echo ""
+echo "启动 GoalfyMediaConverter 服务..."
+PLIST_PATH="$USER_HOME/Library/LaunchAgents/com.ffmpeg.binary.plist"
+if [ -f "$PLIST_PATH" ]; then
+    # 使用 launchctl 加载服务,让 launchd 负责启动
+    # 这样不会阻塞 postinstall 脚本
+    sudo -u "$CURRENT_USER" launchctl load "$PLIST_PATH" 2>&1 | tee -a "$LOG_FILE" || true
+    echo "✓ 服务配置已加载,将在后台启动"
+    echo "  提示: 服务将在几秒钟内启动完成"
+else
+    echo "⚠️ 未找到 LaunchAgent 配置文件"
+fi
+
+# 4. 修改应用包的所有权为当前用户,避免删除时需要密码
+chown -R "$CURRENT_USER:staff" /Applications/GoalfyMediaConverter.app
+echo "✓ 已设置应用包权限"
+
+# 5. 显示安装成功通知
+echo ""
+echo "========================================="
+echo "安装完成!"
+echo "结束时间: $(date)"
+echo "========================================="
+echo ""
+echo "服务信息:"
+echo "  • 地址: http://127.0.0.1:28888"
+echo "  • 日志: $USER_HOME/Library/Logs/goalfy-mediaconverter.log"
+echo "  • 安装日志: $LOG_FILE"
+echo ""
+echo "提示:"
+echo "  • 服务已在后台启动 (可能需要几秒钟)"
+echo "  • 如果服务未启动,请查看日志文件"
+echo "  • 卸载方法: 直接将应用拖到废纸篓即可"
+echo ""
+
+sudo -u "$CURRENT_USER" osascript -e 'display notification "GoalfyMediaConverter 已安装,拖到废纸篓即可自动卸载" with title "安装成功"' 2>/dev/null || true
 
 exit 0
 POSTINSTALL
@@ -208,20 +294,20 @@ cat > "$DIST_DIR/resources/welcome.html" << 'WELCOME'
     </style>
 </head>
 <body>
-    <h1>欢迎安装 FFmpeg Binary 服务</h1>
-    <p>FFmpeg Binary 是一个本地视频转换服务,提供 WebM 到 MP4 的转换功能。</p>
+    <h1>欢迎安装 GoalfyMediaConverter</h1>
+    <p>GoalfyMediaConverter 是一个本地视频转换服务,提供 WebM 到 MP4 的转换功能。</p>
 
     <h3>主要功能:</h3>
     <div class="feature">✓ 同步视频流转换</div>
     <div class="feature">✓ 异步分块上传转换</div>
     <div class="feature">✓ 任务状态查询</div>
     <div class="feature">✓ 本地服务 (127.0.0.1)</div>
-    <div class="feature">✓ 智能端口选择 (18888-28888)</div>
+    <div class="feature">✓ 智能端口选择 (28888)</div>
     <div class="feature">✓ 开机自动启动</div>
 
     <h3>系统要求:</h3>
     <p>• macOS 10.15 或更高版本<br>
-       • FFmpeg 4.0+ (安装命令: <code>brew install ffmpeg</code>)</p>
+       • 无需手动安装任何依赖,FFmpeg 将自动下载安装</p>
 
     <p><strong>注意:</strong> 服务将在后台静默运行,不会显示任何窗口。</p>
 </body>
@@ -237,27 +323,53 @@ cat > "$DIST_DIR/resources/conclusion.html" << 'CONCLUSION'
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 20px; }
         h1 { color: #4CAF50; }
-        .info { background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        .info {
+            background: #2d2d2d;
+            color: #ffffff;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border: 1px solid #4a4a4a;
+        }
+        .info h3 {
+            color: #ffffff;
+            margin-top: 0;
+        }
+        .info strong {
+            color: #ffd700;
+        }
+        code {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: Monaco, Consolas, monospace;
+        }
     </style>
 </head>
 <body>
     <h1>安装完成!</h1>
-    <p>FFmpeg Binary 服务已成功安装。</p>
+    <p>GoalfyMediaConverter 已成功安装。</p>
 
     <div class="info">
         <h3>服务信息:</h3>
-        <p>🌐 服务地址: <strong>http://127.0.0.1:18888</strong><br>
-           📊 健康检查: <strong>http://127.0.0.1:18888/health</strong><br>
-           📁 日志文件: <strong>~/Library/Logs/ffmpeg-binary.log</strong></p>
+        <p>🌐 服务地址: <strong>http://127.0.0.1:28888</strong><br>
+           📊 健康检查: <strong>http://127.0.0.1:28888/health</strong><br>
+           📁 日志文件: <strong>~/Library/Logs/goalfy-mediaconverter.log</strong></p>
     </div>
 
     <h3>使用方法:</h3>
     <p>服务已在后台启动,可以直接通过 API 使用。详细 API 文档请查看项目 README。</p>
 
     <h3>卸载方法:</h3>
-    <p>1. 停止服务: <code>pkill -f ffmpeg-binary</code><br>
-       2. 删除自启动: <code>/Applications/FFmpeg-Binary.app/Contents/MacOS/ffmpeg-binary uninstall</code><br>
-       3. 删除应用: 在"应用程序"中删除 FFmpeg-Binary.app</p>
+    <p><strong>只需拖到废纸篓即可!</strong></p>
+    <p>直接将 GoalfyMediaConverter.app 从"应用程序"或启动台拖到废纸篓,系统会在 1 分钟内自动清理所有相关文件和服务,包括:</p>
+    <ul>
+        <li>✓ 停止运行中的服务进程</li>
+        <li>✓ 移除自启动配置</li>
+        <li>✓ 清理数据目录 (~/.goalfy-mediaconverter)</li>
+    </ul>
+    <p><small>💡 提示:拖到废纸篓后约 1 分钟内自动清理完成,无需清空废纸篓</small></p>
 </body>
 </html>
 CONCLUSION
@@ -280,7 +392,7 @@ echo "==> 创建 Distribution 定义..."
 cat > "$DIST_DIR/distribution.xml" << EOF
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="1">
-    <title>FFmpeg Binary</title>
+    <title>GoalfyMediaConverter</title>
     <background file="background.png" alignment="bottomleft" scaling="proportional"/>
     <welcome file="welcome.html"/>
     <conclusion file="conclusion.html"/>

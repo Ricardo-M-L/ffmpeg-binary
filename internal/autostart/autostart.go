@@ -3,6 +3,7 @@ package autostart
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 )
@@ -72,10 +73,15 @@ func installMacOS() error {
 	<true/>
 	<key>KeepAlive</key>
 	<true/>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
 	<key>StandardOutPath</key>
-	<string>%s/Library/Logs/ffmpeg-binary.log</string>
+	<string>%s/Library/Logs/goalfy-mediaconverter.log</string>
 	<key>StandardErrorPath</key>
-	<string>%s/Library/Logs/ffmpeg-binary.err</string>
+	<string>%s/Library/Logs/goalfy-mediaconverter.err</string>
 </dict>
 </plist>`, exePath, home, home)
 
@@ -102,11 +108,41 @@ func uninstallMacOS() error {
 
 	plistPath := filepath.Join(home, "Library", "LaunchAgents", "com.ffmpeg.binary.plist")
 
-	// 卸载服务
-	fmt.Println("如需停止服务,请运行: launchctl unload", plistPath)
+	// 1. 先停止并卸载 launchd 服务
+	fmt.Println("正在停止 launchd 服务...")
+	if err := execCommand("launchctl", "unload", plistPath); err != nil {
+		fmt.Printf("警告: launchctl unload 失败 (服务可能未运行): %v\n", err)
+		// 继续执行,不返回错误
+	}
 
-	// 删除 plist 文件
-	return os.Remove(plistPath)
+	// 2. 删除 plist 文件
+	fmt.Println("正在删除自启动配置文件...")
+	if err := os.Remove(plistPath); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("自启动配置文件不存在,已跳过")
+		} else {
+			return fmt.Errorf("删除配置文件失败: %v", err)
+		}
+	} else {
+		fmt.Println("✅ 自启动配置已删除")
+	}
+
+	// 3. 停止正在运行的进程
+	fmt.Println("正在停止服务进程...")
+	if err := execCommand("pkill", "-f", "ffmpeg-binary"); err != nil {
+		fmt.Println("警告: 未找到运行中的服务进程")
+	} else {
+		fmt.Println("✅ 服务进程已停止")
+	}
+
+	fmt.Println("\n✅ 卸载完成!")
+	return nil
+}
+
+// execCommand 执行系统命令
+func execCommand(name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	return cmd.Run()
 }
 
 // installWindows 安装 Windows 自启动 (注册表)
@@ -120,7 +156,7 @@ func installWindows() error {
 
 	// 创建快捷方式到启动文件夹
 	startupDir := filepath.Join(os.Getenv("APPDATA"), "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
-	shortcutPath := filepath.Join(startupDir, "FFmpeg Binary.lnk")
+	shortcutPath := filepath.Join(startupDir, "GoalfyMediaConverter.lnk")
 
 	// 这里需要使用 Windows API 或第三方库创建快捷方式
 	// 简化版: 提示用户手动创建
@@ -133,7 +169,7 @@ func installWindows() error {
 // uninstallWindows 卸载 Windows 自启动
 func uninstallWindows() error {
 	startupDir := filepath.Join(os.Getenv("APPDATA"), "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
-	shortcutPath := filepath.Join(startupDir, "FFmpeg Binary.lnk")
+	shortcutPath := filepath.Join(startupDir, "GoalfyMediaConverter.lnk")
 
 	return os.Remove(shortcutPath)
 }
@@ -151,7 +187,7 @@ func installLinux() error {
 		return err
 	}
 
-	servicePath := filepath.Join(systemdDir, "ffmpeg-binary.service")
+	servicePath := filepath.Join(systemdDir, "goalfy-mediaconverter.service")
 
 	exePath, err := os.Executable()
 	if err != nil {
@@ -159,7 +195,7 @@ func installLinux() error {
 	}
 
 	serviceContent := fmt.Sprintf(`[Unit]
-Description=FFmpeg Binary Service
+Description=GoalfyMediaConverter Service
 After=network.target
 
 [Service]
@@ -177,8 +213,8 @@ WantedBy=default.target
 	}
 
 	fmt.Println("systemd 服务文件已创建:", servicePath)
-	fmt.Println("启用服务: systemctl --user enable ffmpeg-binary.service")
-	fmt.Println("启动服务: systemctl --user start ffmpeg-binary.service")
+	fmt.Println("启用服务: systemctl --user enable goalfy-mediaconverter.service")
+	fmt.Println("启动服务: systemctl --user start goalfy-mediaconverter.service")
 
 	return nil
 }
@@ -190,10 +226,10 @@ func uninstallLinux() error {
 		return err
 	}
 
-	servicePath := filepath.Join(home, ".config", "systemd", "user", "ffmpeg-binary.service")
+	servicePath := filepath.Join(home, ".config", "systemd", "user", "goalfy-mediaconverter.service")
 
-	fmt.Println("停止服务: systemctl --user stop ffmpeg-binary.service")
-	fmt.Println("禁用服务: systemctl --user disable ffmpeg-binary.service")
+	fmt.Println("停止服务: systemctl --user stop goalfy-mediaconverter.service")
+	fmt.Println("禁用服务: systemctl --user disable goalfy-mediaconverter.service")
 
 	return os.Remove(servicePath)
 }

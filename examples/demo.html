@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FFmpeg Video Converter - 示例</title>
+    <title>FFmpeg Binary - 视频转换示例</title>
     <style>
         * {
             margin: 0;
@@ -19,7 +19,7 @@
         }
 
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             background: white;
             border-radius: 20px;
@@ -30,8 +30,15 @@
         h1 {
             text-align: center;
             color: #333;
-            margin-bottom: 30px;
+            margin-bottom: 10px;
             font-size: 32px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
         }
 
         .tabs {
@@ -49,11 +56,21 @@
             font-size: 16px;
             color: #666;
             transition: all 0.3s;
+            position: relative;
         }
 
         .tab.active {
             color: #667eea;
-            border-bottom: 3px solid #667eea;
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #667eea;
         }
 
         .tab-content {
@@ -88,6 +105,38 @@
             display: none;
         }
 
+        .settings {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .setting-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .setting-group label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .setting-group select {
+            padding: 10px;
+            border: 2px solid #eee;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        .setting-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
         .btn {
             width: 100%;
             padding: 15px;
@@ -105,7 +154,7 @@
             color: white;
         }
 
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
         }
@@ -113,7 +162,15 @@
         .btn-primary:disabled {
             opacity: 0.6;
             cursor: not-allowed;
-            transform: none;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #666;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
         }
 
         .progress {
@@ -143,6 +200,7 @@
             justify-content: center;
             color: white;
             font-weight: 600;
+            font-size: 14px;
         }
 
         .status {
@@ -163,10 +221,31 @@
             display: block;
         }
 
+        .result h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .result-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .result-info div {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
         video {
             width: 100%;
             border-radius: 8px;
-            margin-top: 15px;
+            margin-bottom: 15px;
+            background: #000;
         }
 
         .info {
@@ -178,70 +257,133 @@
             font-size: 14px;
             color: #856404;
         }
+
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        @media (max-width: 600px) {
+            .settings {
+                grid-template-columns: 1fr;
+            }
+
+            .result-info {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎬 FFmpeg 视频转换器</h1>
+        <h1>🎬 FFmpeg Binary 视频转换器</h1>
+        <p class="subtitle">WebM 转 MP4 - 本地运行 · 快速转换 · 完全免费</p>
 
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('sync')">同步转换</button>
-            <button class="tab" onclick="switchTab('async')">异步转换</button>
+            <button class="tab active" onclick="switchTab('small')">小文件转换</button>
+            <button class="tab" onclick="switchTab('large')">大文件分片上传</button>
         </div>
 
-        <!-- 同步转换 -->
-        <div id="sync" class="tab-content active">
-            <div class="upload-area" id="syncUpload" onclick="document.getElementById('syncFile').click()">
+        <!-- 小文件上传 -->
+        <div id="small" class="tab-content active">
+            <div class="upload-area" id="smallUpload" onclick="document.getElementById('smallFile').click()">
                 <p style="font-size: 48px; margin-bottom: 10px;">📁</p>
-                <p style="font-size: 18px; color: #333;">点击或拖拽上传 WebM 视频</p>
-                <p style="font-size: 14px; color: #999; margin-top: 10px;">支持直接转换为 MP4</p>
+                <p style="font-size: 18px; color: #333; margin-bottom: 5px;">点击或拖拽上传 WebM 视频</p>
+                <p style="font-size: 14px; color: #999;">推荐小于 10MB 的文件</p>
             </div>
-            <input type="file" id="syncFile" accept="video/webm">
+            <input type="file" id="smallFile" accept="video/webm">
 
-            <div class="progress" id="syncProgress">
-                <div class="progress-bar">
-                    <div class="progress-fill" id="syncProgressFill" style="width: 0%"></div>
+            <div class="settings">
+                <div class="setting-group">
+                    <label>输出格式</label>
+                    <select id="smallFormat">
+                        <option value="mp4">MP4 (推荐)</option>
+                    </select>
                 </div>
-                <div class="status" id="syncStatus">准备转换...</div>
+                <div class="setting-group">
+                    <label>转换质量</label>
+                    <select id="smallQuality">
+                        <option value="low">低质量 (快速)</option>
+                        <option value="medium" selected>中等质量 (推荐)</option>
+                        <option value="high">高质量 (慢速)</option>
+                    </select>
+                </div>
             </div>
 
-            <div class="result" id="syncResult">
+            <div class="progress" id="smallProgress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="smallProgressFill" style="width: 0%">0%</div>
+                </div>
+                <div class="status" id="smallStatus">准备上传...</div>
+            </div>
+
+            <div class="result" id="smallResult">
                 <h3>✅ 转换完成!</h3>
-                <video id="syncVideo" controls></video>
-                <button class="btn btn-primary" onclick="downloadVideo('syncVideo')">下载 MP4</button>
+                <div class="result-info" id="smallResultInfo"></div>
+                <video id="smallVideo" controls></video>
+                <button class="btn btn-primary" onclick="downloadVideo('smallVideo', 'small')">💾 下载 MP4</button>
             </div>
         </div>
 
-        <!-- 异步转换 -->
-        <div id="async" class="tab-content">
-            <div class="upload-area" id="asyncUpload" onclick="document.getElementById('asyncFile').click()">
+        <!-- 大文件分片上传 -->
+        <div id="large" class="tab-content">
+            <div class="upload-area" id="largeUpload" onclick="document.getElementById('largeFile').click()">
                 <p style="font-size: 48px; margin-bottom: 10px;">📁</p>
-                <p style="font-size: 18px; color: #333;">点击或拖拽上传 WebM 视频</p>
-                <p style="font-size: 14px; color: #999; margin-top: 10px;">分片上传,适合大文件</p>
+                <p style="font-size: 18px; color: #333; margin-bottom: 5px;">点击或拖拽上传 WebM 视频</p>
+                <p style="font-size: 14px; color: #999;">支持大文件,分片上传更稳定</p>
             </div>
-            <input type="file" id="asyncFile" accept="video/webm">
+            <input type="file" id="largeFile" accept="video/webm">
 
-            <div class="progress" id="asyncProgress">
-                <div class="progress-bar">
-                    <div class="progress-fill" id="asyncProgressFill" style="width: 0%"></div>
+            <div class="settings">
+                <div class="setting-group">
+                    <label>输出格式</label>
+                    <select id="largeFormat">
+                        <option value="mp4">MP4 (推荐)</option>
+                    </select>
                 </div>
-                <div class="status" id="asyncStatus">准备上传...</div>
+                <div class="setting-group">
+                    <label>转换质量</label>
+                    <select id="largeQuality">
+                        <option value="low">低质量 (快速)</option>
+                        <option value="medium" selected>中等质量 (推荐)</option>
+                        <option value="high">高质量 (慢速)</option>
+                    </select>
+                </div>
             </div>
 
-            <div class="result" id="asyncResult">
+            <div class="progress" id="largeProgress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="largeProgressFill" style="width: 0%">0%</div>
+                </div>
+                <div class="status" id="largeStatus">准备上传...</div>
+            </div>
+
+            <div class="result" id="largeResult">
                 <h3>✅ 转换完成!</h3>
-                <video id="asyncVideo" controls></video>
-                <button class="btn btn-primary" onclick="downloadVideo('asyncVideo')">下载 MP4</button>
+                <div class="result-info" id="largeResultInfo"></div>
+                <video id="largeVideo" controls></video>
+                <button class="btn btn-primary" onclick="downloadVideo('largeVideo', 'large')">💾 下载 MP4</button>
             </div>
         </div>
 
         <div class="info">
-            💡 <strong>提示:</strong> 确保 FFmpeg Binary 服务正在运行 (端口 18888)
+            💡 <strong>提示:</strong> 确保 FFmpeg Binary 服务正在运行在 <code>http://127.0.0.1:28888</code>
         </div>
     </div>
 
     <script>
-        const API_BASE = 'http://127.0.0.1:18888/api/v1';
+        const API_BASE = 'http://127.0.0.1:28888/api';
+
+        // 全局状态
+        let currentUploadId = null;
+        let currentTaskId = null;
 
         // 切换标签
         function switchTab(tab) {
@@ -250,137 +392,327 @@
 
             event.target.classList.add('active');
             document.getElementById(tab).classList.add('active');
+
+            // 重置状态
+            resetUI(tab);
         }
 
-        // 同步转换
-        document.getElementById('syncFile').addEventListener('change', async (e) => {
+        // 重置 UI
+        function resetUI(mode) {
+            const progress = document.getElementById(`${mode}Progress`);
+            const result = document.getElementById(`${mode}Result`);
+            const progressFill = document.getElementById(`${mode}ProgressFill`);
+
+            progress.classList.remove('active');
+            result.classList.remove('active');
+            progressFill.style.width = '0%';
+            progressFill.textContent = '0%';
+        }
+
+        // 更新进度
+        function updateProgress(mode, percent, text) {
+            const progressFill = document.getElementById(`${mode}ProgressFill`);
+            const status = document.getElementById(`${mode}Status`);
+
+            progressFill.style.width = percent + '%';
+            progressFill.textContent = percent + '%';
+            status.textContent = text;
+        }
+
+        // 显示错误
+        function showError(mode, message) {
+            const status = document.getElementById(`${mode}Status`);
+            const progress = document.getElementById(`${mode}Progress`);
+
+            status.textContent = '❌ ' + message;
+            status.style.color = '#d32f2f';
+
+            setTimeout(() => {
+                progress.classList.remove('active');
+                status.style.color = '#666';
+            }, 3000);
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+            return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+        }
+
+        // 小文件上传转换
+        document.getElementById('smallFile').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            const progress = document.getElementById('syncProgress');
-            const progressFill = document.getElementById('syncProgressFill');
-            const status = document.getElementById('syncStatus');
-            const result = document.getElementById('syncResult');
+            const mode = 'small';
+            const quality = document.getElementById('smallQuality').value;
+            const format = document.getElementById('smallFormat').value;
+
+            const progress = document.getElementById(`${mode}Progress`);
+            const result = document.getElementById(`${mode}Result`);
 
             progress.classList.add('active');
             result.classList.remove('active');
-            status.textContent = '正在转换...';
-            progressFill.style.width = '50%';
 
             try {
-                const response = await fetch(`${API_BASE}/convert/sync`, {
+                // 1. 初始化上传
+                updateProgress(mode, 10, '正在初始化上传...');
+                const initRes = await fetch(`${API_BASE}/upload/init`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'video/webm' },
-                    body: file
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fileName: file.name,
+                        fileSize: file.size,
+                        totalChunks: 1,
+                        chunkSize: file.size
+                    })
                 });
 
-                if (!response.ok) throw new Error('转换失败');
+                if (!initRes.ok) throw new Error('初始化上传失败');
+                const initData = await initRes.json();
+                const uploadId = initData.data.uploadId;
+                currentUploadId = uploadId;
 
-                const blob = await response.blob();
+                // 2. 上传文件(作为单个切片)
+                updateProgress(mode, 30, '正在上传文件...');
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('uploadId', uploadId);
+                formData.append('chunkIndex', '0');
+
+                const uploadRes = await fetch(`${API_BASE}/upload/chunk`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!uploadRes.ok) throw new Error('上传文件失败');
+
+                // 3. 等待合并完成
+                updateProgress(mode, 50, '正在合并文件...');
+                await waitForMerge(uploadId);
+
+                // 4. 开始转换
+                updateProgress(mode, 60, '正在开始转换...');
+                const convertRes = await fetch(`${API_BASE}/convert/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        uploadId: uploadId,
+                        outputFormat: format,
+                        quality: quality
+                    })
+                });
+
+                if (!convertRes.ok) throw new Error('开始转换失败');
+                const convertData = await convertRes.json();
+                const taskId = convertData.data.taskId;
+                currentTaskId = taskId;
+
+                // 5. 轮询转换进度
+                await pollConvertProgress(mode, taskId, 60, 95);
+
+                // 6. 下载并显示结果
+                updateProgress(mode, 95, '正在加载预览...');
+                const downloadRes = await fetch(`${API_BASE}/convert/download/${taskId}`);
+                if (!downloadRes.ok) throw new Error('下载文件失败');
+
+                const blob = await downloadRes.blob();
                 const url = URL.createObjectURL(blob);
 
-                document.getElementById('syncVideo').src = url;
-                progressFill.style.width = '100%';
-                status.textContent = '转换完成!';
+                document.getElementById(`${mode}Video`).src = url;
+
+                // 显示结果信息
+                const resultInfo = document.getElementById(`${mode}ResultInfo`);
+                resultInfo.innerHTML = `
+                    <div><strong>原始文件:</strong> ${file.name}</div>
+                    <div><strong>文件大小:</strong> ${formatFileSize(file.size)}</div>
+                    <div><strong>输出格式:</strong> ${format.toUpperCase()}</div>
+                    <div><strong>转换质量:</strong> ${quality === 'low' ? '低' : quality === 'medium' ? '中' : '高'}</div>
+                `;
+
+                updateProgress(mode, 100, '✅ 转换完成!');
 
                 setTimeout(() => {
                     progress.classList.remove('active');
                     result.classList.add('active');
                 }, 500);
+
             } catch (error) {
-                status.textContent = '转换失败: ' + error.message;
-                progressFill.style.width = '0%';
+                console.error('转换失败:', error);
+                showError(mode, error.message);
             }
         });
 
-        // 异步转换
-        document.getElementById('asyncFile').addEventListener('change', async (e) => {
+        // 大文件分片上传转换
+        document.getElementById('largeFile').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            const progress = document.getElementById('asyncProgress');
-            const progressFill = document.getElementById('asyncProgressFill');
-            const status = document.getElementById('asyncStatus');
-            const result = document.getElementById('asyncResult');
+            const mode = 'large';
+            const quality = document.getElementById('largeQuality').value;
+            const format = document.getElementById('largeFormat').value;
+            const chunkSize = 1024 * 1024; // 1MB
+
+            const progress = document.getElementById(`${mode}Progress`);
+            const result = document.getElementById(`${mode}Result`);
 
             progress.classList.add('active');
             result.classList.remove('active');
 
             try {
-                // 创建任务
-                status.textContent = '创建转换任务...';
-                const createResp = await fetch(`${API_BASE}/convert/async`, { method: 'POST' });
-                const { task_id, upload_url } = await createResp.json();
-
-                // 分片上传
-                const chunkSize = 1024 * 1024; // 1MB
+                // 1. 初始化上传
+                updateProgress(mode, 5, '正在初始化上传...');
                 const totalChunks = Math.ceil(file.size / chunkSize);
+                const initRes = await fetch(`${API_BASE}/upload/init`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fileName: file.name,
+                        fileSize: file.size,
+                        totalChunks: totalChunks,
+                        chunkSize: chunkSize
+                    })
+                });
 
+                if (!initRes.ok) throw new Error('初始化上传失败');
+                const initData = await initRes.json();
+                const uploadId = initData.data.uploadId;
+                currentUploadId = uploadId;
+
+                // 2. 分片上传
                 for (let i = 0; i < totalChunks; i++) {
-                    const start = i * chunkSize;
-                    const end = Math.min(start + chunkSize, file.size);
-                    const chunk = file.slice(start, end);
-                    const isLast = i === totalChunks - 1;
+                    const chunk = file.slice(i * chunkSize, (i + 1) * chunkSize);
+                    const formData = new FormData();
+                    formData.append('file', chunk);
+                    formData.append('uploadId', uploadId);
+                    formData.append('chunkIndex', i.toString());
 
-                    await fetch(`${API_BASE}${upload_url}`, {
+                    const uploadRes = await fetch(`${API_BASE}/upload/chunk`, {
                         method: 'POST',
-                        headers: { 'X-Last-Chunk': isLast ? 'true' : 'false' },
-                        body: chunk
+                        body: formData
                     });
 
-                    const uploadProgress = Math.floor((i + 1) / totalChunks * 50);
-                    progressFill.style.width = uploadProgress + '%';
-                    status.textContent = `上传中... ${i + 1}/${totalChunks}`;
+                    if (!uploadRes.ok) throw new Error(`上传切片 ${i + 1} 失败`);
+
+                    const uploadProgress = Math.floor((i + 1) / totalChunks * 40) + 5;
+                    updateProgress(mode, uploadProgress, `上传进度 ${i + 1}/${totalChunks} (${Math.floor((i + 1) / totalChunks * 100)}%)`);
                 }
 
-                // 轮询状态
-                status.textContent = '正在转换...';
-                while (true) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                // 3. 等待合并完成
+                updateProgress(mode, 50, '正在合并文件...');
+                await waitForMerge(uploadId);
 
-                    const statusResp = await fetch(`${API_BASE}/task/${task_id}`);
-                    const taskStatus = await statusResp.json();
+                // 4. 开始转换
+                updateProgress(mode, 55, '正在开始转换...');
+                const convertRes = await fetch(`${API_BASE}/convert/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        uploadId: uploadId,
+                        outputFormat: format,
+                        quality: quality
+                    })
+                });
 
-                    const totalProgress = 50 + Math.floor(taskStatus.progress / 2);
-                    progressFill.style.width = totalProgress + '%';
-                    status.textContent = `转换中... ${taskStatus.progress}%`;
+                if (!convertRes.ok) throw new Error('开始转换失败');
+                const convertData = await convertRes.json();
+                const taskId = convertData.data.taskId;
+                currentTaskId = taskId;
 
-                    if (taskStatus.status === 'completed') {
-                        // 下载视频
-                        const downloadResp = await fetch(`${API_BASE}/task/${task_id}/download`);
-                        const blob = await downloadResp.blob();
-                        const url = URL.createObjectURL(blob);
+                // 5. 轮询转换进度
+                await pollConvertProgress(mode, taskId, 55, 95);
 
-                        document.getElementById('asyncVideo').src = url;
-                        progressFill.style.width = '100%';
-                        status.textContent = '转换完成!';
+                // 6. 下载并显示结果
+                updateProgress(mode, 95, '正在加载预览...');
+                const downloadRes = await fetch(`${API_BASE}/convert/download/${taskId}`);
+                if (!downloadRes.ok) throw new Error('下载文件失败');
 
-                        setTimeout(() => {
-                            progress.classList.remove('active');
-                            result.classList.add('active');
-                        }, 500);
-                        break;
-                    } else if (taskStatus.status === 'failed') {
-                        throw new Error(taskStatus.error);
-                    }
-                }
+                const blob = await downloadRes.blob();
+                const url = URL.createObjectURL(blob);
+
+                document.getElementById(`${mode}Video`).src = url;
+
+                // 显示结果信息
+                const resultInfo = document.getElementById(`${mode}ResultInfo`);
+                resultInfo.innerHTML = `
+                    <div><strong>原始文件:</strong> ${file.name}</div>
+                    <div><strong>文件大小:</strong> ${formatFileSize(file.size)}</div>
+                    <div><strong>输出格式:</strong> ${format.toUpperCase()}</div>
+                    <div><strong>转换质量:</strong> ${quality === 'low' ? '低' : quality === 'medium' ? '中' : '高'}</div>
+                `;
+
+                updateProgress(mode, 100, '✅ 转换完成!');
+
+                setTimeout(() => {
+                    progress.classList.remove('active');
+                    result.classList.add('active');
+                }, 500);
+
             } catch (error) {
-                status.textContent = '转换失败: ' + error.message;
-                progressFill.style.width = '0%';
+                console.error('转换失败:', error);
+                showError(mode, error.message);
             }
         });
 
+        // 等待文件合并完成
+        async function waitForMerge(uploadId) {
+            let attempts = 0;
+            const maxAttempts = 30; // 最多等待 30 秒
+
+            while (attempts < maxAttempts) {
+                const statusRes = await fetch(`${API_BASE}/upload/status/${uploadId}`);
+                if (!statusRes.ok) throw new Error('查询上传状态失败');
+
+                const statusData = await statusRes.json();
+                if (statusData.data.status === 'merged') {
+                    return;
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                attempts++;
+            }
+
+            throw new Error('文件合并超时');
+        }
+
+        // 轮询转换进度
+        async function pollConvertProgress(mode, taskId, startProgress, endProgress) {
+            while (true) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                const progressRes = await fetch(`${API_BASE}/progress/${taskId}`);
+                if (!progressRes.ok) throw new Error('查询转换进度失败');
+
+                const progressData = await progressRes.json();
+                const convertProgress = progressData.data.progress;
+                const status = progressData.data.status;
+
+                const totalProgress = Math.floor(startProgress + (endProgress - startProgress) * convertProgress / 100);
+                updateProgress(mode, totalProgress, `转换进度 ${convertProgress}%`);
+
+                if (status === 'completed') {
+                    return;
+                } else if (status === 'failed') {
+                    throw new Error(progressData.data.error || '转换失败');
+                }
+            }
+        }
+
         // 下载视频
-        function downloadVideo(videoId) {
+        function downloadVideo(videoId, mode) {
             const video = document.getElementById(videoId);
             const a = document.createElement('a');
             a.href = video.src;
-            a.download = 'converted_' + Date.now() + '.mp4';
+            a.download = `converted_${Date.now()}.mp4`;
+            document.body.appendChild(a);
             a.click();
+            document.body.removeChild(a);
         }
 
         // 拖拽上传支持
-        ['syncUpload', 'asyncUpload'].forEach(id => {
+        ['smallUpload', 'largeUpload'].forEach(id => {
             const area = document.getElementById(id);
             const fileInput = document.getElementById(id.replace('Upload', 'File'));
 
@@ -399,11 +731,37 @@
 
                 const files = e.dataTransfer.files;
                 if (files.length > 0) {
-                    fileInput.files = files;
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(files[0]);
+                    fileInput.files = dataTransfer.files;
                     fileInput.dispatchEvent(new Event('change'));
                 }
             });
         });
+
+        // 检查服务状态
+        async function checkServiceStatus() {
+            try {
+                const response = await fetch('http://127.0.0.1:28888/health');
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ FFmpeg Binary 服务正常运行', data);
+                }
+            } catch (error) {
+                const info = document.querySelector('.info');
+                info.classList.add('error');
+                info.innerHTML = `
+                    <strong>⚠️ 服务未运行</strong><br>
+                    请检查 FFmpeg Binary 服务是否已启动:<br>
+                    • macOS PKG 安装: 服务应该已自动启动<br>
+                    • 开发环境: <code>go run main.go</code> 或 <code>./ffmpeg-binary</code><br>
+                    • 检查服务: <code>lsof -i :28888</code>
+                `;
+            }
+        }
+
+        // 页面加载时检查服务状态
+        window.addEventListener('load', checkServiceStatus);
     </script>
 </body>
 </html>

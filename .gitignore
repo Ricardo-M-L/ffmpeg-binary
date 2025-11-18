@@ -1,0 +1,51 @@
+# 二进制文件
+ffmpeg-binary
+ffmpeg-binary-*
+*.exe
+*.app
+*.dmg
+
+# 构建目录
+build/
+dist/
+
+# Go 相关
+*.o
+*.a
+*.so
+
+# 依赖
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 测试
+*.test
+*.out
+coverage.txt
+
+# 临时文件
+*.tmp
+*.log
+
+# macOS
+.DS_Store
+
+# 配置文件(本地)
+config.local.json
+
+# 数据目录
+data/
+*.webm
+*.mp4
+
+# 打包产物
+dist/
+*.deb
+*.rpm
+*.pkg
