@@ -79,6 +79,50 @@ if [ $? -ne 0 ]; then
 fi
 echo "    ✅ 可执行文件已生成"
 
+# 下载 FFmpeg (如果不存在)
+echo "==> 准备 FFmpeg..."
+FFMPEG_DIR="$PROJECT_ROOT/$BUILD_DIR/ffmpeg"
+FFMPEG_ZIP="$PROJECT_ROOT/$BUILD_DIR/ffmpeg.zip"
+FFMPEG_EXE="$FFMPEG_DIR/bin/ffmpeg.exe"
+
+if [ -f "$FFMPEG_EXE" ]; then
+    echo "    ✅ FFmpeg 已存在,跳过下载"
+else
+    echo "    下载 FFmpeg (约 130MB,请稍候)..."
+    FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+
+    # 使用 curl 下载
+    if ! curl -L -o "$FFMPEG_ZIP" "$FFMPEG_URL"; then
+        echo "    ❌ FFmpeg 下载失败!"
+        echo "    请检查网络连接或手动下载 FFmpeg"
+        exit 1
+    fi
+
+    echo "    解压 FFmpeg..."
+    mkdir -p "$FFMPEG_DIR"
+    unzip -q "$FFMPEG_ZIP" -d "$FFMPEG_DIR"
+
+    # 找到 ffmpeg.exe 并移动到 bin 目录
+    FFMPEG_EXTRACTED=$(find "$FFMPEG_DIR" -name "ffmpeg.exe" -type f | head -1)
+    if [ -z "$FFMPEG_EXTRACTED" ]; then
+        echo "    ❌ 未找到 ffmpeg.exe!"
+        exit 1
+    fi
+
+    mkdir -p "$FFMPEG_DIR/bin"
+    mv "$FFMPEG_EXTRACTED" "$FFMPEG_DIR/bin/"
+
+    # 清理解压的其他文件夹 (保留 bin 目录)
+    for dir in "$FFMPEG_DIR"/*/; do
+        if [ "$(basename "$dir")" != "bin" ]; then
+            rm -rf "$dir"
+        fi
+    done
+    rm -f "$FFMPEG_ZIP"
+
+    echo "    ✅ FFmpeg 已准备就绪"
+fi
+
 # 使用 Docker 容器运行 NSIS 构建安装包
 echo "==> 创建安装包 (使用 NSIS)..."
 
@@ -104,18 +148,17 @@ echo "📦 安装包: $DIST_DIR/GoalfyMediaConverter-Setup.exe"
 echo ""
 echo "功能特性:"
 echo "  ✅ 图形化安装界面 (NSIS)"
-echo "  ✅ 自动下载并安装 FFmpeg"
-echo "  ✅ 开机自启动 (可选)"
+echo "  ✅ FFmpeg 已内置打包,无需在线下载"
+echo "  ✅ 开机自启动 (Windows 服务)"
 echo "  ✅ 自动启动服务"
 echo "  ✅ 标准卸载程序"
 echo "  ✅ 添加到\"添加/删除程序\""
 echo ""
 echo "用户安装体验:"
 echo "  1. 双击 GoalfyMediaConverter-Setup.exe"
-echo "  2. 按照安装向导操作"
-echo "  3. 安装程序自动下载 FFmpeg"
-echo "  4. 服务自动启动"
-echo "  5. 访问 http://127.0.0.1:28888"
+echo "  2. 按照安装向导操作 (约 1-2 分钟)"
+echo "  3. 安装完成后服务自动启动"
+echo "  4. 访问 http://127.0.0.1:28888"
 echo ""
 echo "💡 提示: 可以在 Windows 虚拟机或实体机上测试安装包"
 echo ""

@@ -11,7 +11,6 @@
 !define APP_EXE "ffmpeg-binary.exe"
 !define SERVICE_NAME "GoalfyMediaConverter"
 !define INSTALL_DIR "$PROGRAMFILES64\${APP_NAME}"
-!define FFMPEG_URL "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 
 ; 安装包输出配置
 Name "${APP_NAME}"
@@ -89,71 +88,14 @@ Section "Install"
     CreateDirectory "$INSTDIR\output"
     CreateDirectory "$INSTDIR\logs"
 
-    ; ========== FFmpeg 检测 ==========
-    DetailPrint "检测 FFmpeg..."
+    ; ========== FFmpeg 安装 ==========
+    DetailPrint "安装 FFmpeg..."
 
-    ; 检查 bin 目录是否已有 ffmpeg.exe
-    IfFileExists "$INSTDIR\bin\ffmpeg.exe" ffmpeg_exists check_system_ffmpeg
+    ; 复制打包的 ffmpeg.exe
+    SetOutPath "$INSTDIR\bin"
+    File "../build/windows/ffmpeg/bin/ffmpeg.exe"
 
-    check_system_ffmpeg:
-        ; 检查系统 PATH 中是否有 ffmpeg
-        nsExec::ExecToStack 'where ffmpeg.exe'
-        Pop $0
-        ${If} $0 == 0
-            DetailPrint "系统已安装 FFmpeg"
-            Goto ffmpeg_ready
-        ${EndIf}
-
-        ; FFmpeg 不存在,自动下载安装
-        DetailPrint "未检测到 FFmpeg,准备自动下载..."
-
-    download_ffmpeg:
-        DetailPrint "开始下载 FFmpeg (约 70MB)..."
-
-        ; 使用 inetc 插件下载(带进度条)
-        inetc::get /caption "下载 FFmpeg" /canceltext "取消" "${FFMPEG_URL}" "$TEMP\ffmpeg.zip" /end
-        Pop $0
-
-        ${If} $0 == "OK"
-            DetailPrint "下载完成,正在解压..."
-
-            ; 创建解压脚本
-            FileOpen $1 "$TEMP\extract_ffmpeg.ps1" w
-            FileWrite $1 'chcp 65001 > $$null$\r$\n'
-            FileWrite $1 'try {$\r$\n'
-            FileWrite $1 '    Expand-Archive -Path "$$env:TEMP\ffmpeg.zip" -DestinationPath "$$env:TEMP\ffmpeg_tmp" -Force$\r$\n'
-            FileWrite $1 '    $$exe = Get-ChildItem -Path "$$env:TEMP\ffmpeg_tmp" -Filter "ffmpeg.exe" -Recurse | Select -First 1$\r$\n'
-            FileWrite $1 '    if ($$exe) {$\r$\n'
-            FileWrite $1 '        Copy-Item $$exe.FullName "$INSTDIR\bin\ffmpeg.exe" -Force$\r$\n'
-            FileWrite $1 '        exit 0$\r$\n'
-            FileWrite $1 '    }$\r$\n'
-            FileWrite $1 '    exit 1$\r$\n'
-            FileWrite $1 '} catch { exit 1 }$\r$\n'
-            FileClose $1
-
-            nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -File "$TEMP\extract_ffmpeg.ps1"'
-            Pop $0
-
-            Delete "$TEMP\extract_ffmpeg.ps1"
-            Delete "$TEMP\ffmpeg.zip"
-            RMDir /r "$TEMP\ffmpeg_tmp"
-
-            ${If} $0 == 0
-                DetailPrint "FFmpeg 安装成功"
-            ${Else}
-                MessageBox MB_OK|MB_ICONEXCLAMATION "FFmpeg 解压失败!$\n$\n请稍后手动下载安装。"
-            ${EndIf}
-        ${Else}
-            DetailPrint "下载失败或已取消"
-            MessageBox MB_OK|MB_ICONINFORMATION "已取消 FFmpeg 下载。$\n$\n您可以稍后手动下载安装。"
-        ${EndIf}
-        Goto ffmpeg_ready
-
-    ffmpeg_exists:
-        DetailPrint "检测到已安装的 FFmpeg"
-
-    ffmpeg_ready:
-    ; ========== FFmpeg 检测完成 ==========
+    DetailPrint "✓ FFmpeg 安装完成"
 
     ; ========== Windows 服务检测与安装 ==========
     DetailPrint "检测 Windows 服务..."
