@@ -65,26 +65,9 @@ func (w *Watcher) checkAndCleanup() {
 		return
 	}
 
-	// 应用不在 /Applications/ 了,检查是否在废纸篓
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Printf("获取用户目录失败: %v", err)
-		return
-	}
-
-	trashPath := filepath.Join(homeDir, ".Trash", "GoalfyMediaConverter.app")
-	_, err = os.Stat(trashPath)
-	inTrash := err == nil
-
-	if !inTrash {
-		// 既不在 /Applications/ 也不在废纸篓
-		// 可能是被彻底删除了,或者正在移动过程中
-		// 为了安全起见,再等一个周期确认
-		return
-	}
-
-	// 确认应用在废纸篓中,执行清理
-	log.Println("检测到应用已被移到废纸篓,开始执行自清理...")
+	// 应用不在 /Applications/ 了
+	// 无论是在废纸篓、被彻底删除,还是从系统设置删除,都应该执行清理
+	log.Println("检测到应用已被移除(废纸篓/彻底删除/系统设置删除),开始执行自清理...")
 	w.performCleanup()
 
 	// 清理完成后退出程序

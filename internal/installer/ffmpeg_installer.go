@@ -77,8 +77,21 @@ func (i *FFmpegInstaller) findFFmpeg() (string, error) {
 			"/usr/local/bin/ffmpeg",
 		)
 	case "windows":
+		// 获取当前执行文件所在目录
+		exePath, err := os.Executable()
+		if err == nil {
+			exeDir := strings.TrimSuffix(exePath, "\\ffmpeg-binary.exe")
+			exeDir = strings.TrimSuffix(exeDir, "/ffmpeg-binary.exe")
+			// 优先查找安装目录的 bin 文件夹
+			paths = append(paths,
+				exeDir+"\\bin\\ffmpeg.exe",
+				exeDir+"/bin/ffmpeg.exe",
+			)
+		}
+		// 添加常见的系统路径
 		paths = append(paths,
 			`C:\Program Files\ffmpeg\bin\ffmpeg.exe`,
+			`C:\Program Files\GoalfyMediaConverter\bin\ffmpeg.exe`,
 			`C:\ffmpeg\bin\ffmpeg.exe`,
 		)
 	}

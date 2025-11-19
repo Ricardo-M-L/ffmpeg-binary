@@ -3,10 +3,19 @@
 
 FROM golang:1.24-bullseye
 
-# 安装 NSIS (原生支持 Linux/ARM64)
+# 安装 NSIS 和必要的工具
 RUN apt-get update && \
-    apt-get install -y nsis nsis-common && \
+    apt-get install -y nsis nsis-common nsis-pluginapi wget unzip && \
     rm -rf /var/lib/apt/lists/*
+
+# 下载并安装 Inetc 插件 (用于下载文件并显示进度)
+RUN mkdir -p /tmp/inetc && \
+    cd /tmp/inetc && \
+    wget https://nsis.sourceforge.io/mediawiki/images/c/c9/Inetc.zip && \
+    unzip Inetc.zip && \
+    cp Plugins/x86-ansi/INetC.dll /usr/share/nsis/Plugins/x86-ansi/ && \
+    cp Plugins/x86-unicode/INetC.dll /usr/share/nsis/Plugins/x86-unicode/ && \
+    rm -rf /tmp/inetc
 
 # 设置工作目录
 WORKDIR /workspace
