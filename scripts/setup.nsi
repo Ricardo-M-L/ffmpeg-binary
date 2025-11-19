@@ -89,16 +89,16 @@ Section "Install"
     CreateDirectory "$INSTDIR\logs"
 
     ; ========== FFmpeg 安装 ==========
-    DetailPrint "安装 FFmpeg..."
+    DetailPrint "Installing FFmpeg..."
 
     ; 复制打包的 ffmpeg.exe
     SetOutPath "$INSTDIR\bin"
     File "../build/windows/ffmpeg/bin/ffmpeg.exe"
 
-    DetailPrint "✓ FFmpeg 安装完成"
+    DetailPrint "FFmpeg installed"
 
     ; ========== Windows 服务检测与安装 ==========
-    DetailPrint "检测 Windows 服务..."
+    DetailPrint "Checking Windows Service..."
 
     ; 检查服务是否存在并且正在运行
     nsExec::ExecToStack 'sc query ${SERVICE_NAME}'
@@ -114,11 +114,11 @@ Section "Install"
 
         ${If} $2 != ""
             ; 服务已安装且正在运行
-            DetailPrint "检测到服务已安装且正在运行,跳过安装"
+            DetailPrint "Service is already running, skipping installation"
             Goto service_ready
         ${Else}
             ; 服务存在但未运行,先停止并卸载旧服务
-            DetailPrint "检测到已停止的服务,准备重新安装..."
+            DetailPrint "Reinstalling stopped service..."
             nsExec::ExecToLog 'sc stop ${SERVICE_NAME}'
             Sleep 1000
             nsExec::ExecToLog '"$INSTDIR\${APP_EXE}" uninstall-service'
@@ -126,39 +126,35 @@ Section "Install"
         ${EndIf}
     ${Else}
         ; 服务不存在
-        DetailPrint "未检测到服务,准备安装..."
+        DetailPrint "Installing new service..."
     ${EndIf}
 
     ; 安装 Windows 服务
-    DetailPrint "安装 Windows 服务..."
+    DetailPrint "Installing Windows Service..."
     nsExec::ExecToStack '"$INSTDIR\${APP_EXE}" install-service'
     Pop $0 ; 返回值
     Pop $1 ; 输出内容
 
     ${If} $0 == 0
-        DetailPrint "服务安装成功"
+        DetailPrint "Service installed successfully"
     ${Else}
-        DetailPrint "服务安装失败 (错误代码: $0)"
-        MessageBox MB_OK|MB_ICONEXCLAMATION "服务安装失败!$\n$\n请确保以管理员权限运行安装程序。"
+        DetailPrint "Service installation failed (error: $0)"
         Abort
     ${EndIf}
 
     Sleep 1000
 
     ; 启动 Windows 服务
-    DetailPrint "启动服务..."
+    DetailPrint "Starting service..."
     nsExec::ExecToStack 'sc start ${SERVICE_NAME}'
     Pop $0 ; 返回值
 
     ${If} $0 == 0
-        DetailPrint "服务启动成功"
+        DetailPrint "Service started successfully"
     ${Else}
-        DetailPrint "尝试备用方法启动..."
+        DetailPrint "Trying alternative method..."
         nsExec::ExecToStack '"$INSTDIR\${APP_EXE}" start-service'
         Pop $0
-        ${If} $0 != 0
-            MessageBox MB_OK|MB_ICONEXCLAMATION "服务启动失败!$\n$\n请手动启动服务:$\n1. 按 Win+R 输入 services.msc$\n2. 找到 Goalfy Media Converter Service$\n3. 右键点击选择启动"
-        ${EndIf}
     ${EndIf}
 
 service_ready:
@@ -225,21 +221,18 @@ service_ready:
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
                      "DisplayVersion" "${APP_VERSION}"
 
-    DetailPrint "安装完成!"
-
-    ; 显示完成消息
-    MessageBox MB_OK|MB_ICONINFORMATION "安装完成!$\n$\nGoalfyMediaConverter 已安装为 Windows 服务$\n$\n服务已启动,后台运行$\n开机自动启动已启用$\n$\nWeb 界面: http://127.0.0.1:28888"
+    DetailPrint "Installation completed"
 SectionEnd
 
 ; 卸载部分
 Section "Uninstall"
     ; 停止服务 (静默执行)
-    DetailPrint "停止服务..."
+    DetailPrint "Stopping service..."
     nsExec::ExecToLog 'sc stop ${SERVICE_NAME}'
     Sleep 2000
 
     ; 卸载服务 (静默执行)
-    DetailPrint "卸载服务..."
+    DetailPrint "Uninstalling service..."
     nsExec::ExecToLog '"$INSTDIR\${APP_EXE}" uninstall-service'
     Sleep 1000
 
@@ -264,6 +257,4 @@ Section "Uninstall"
 
     ; 删除注册表项
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
-
-    MessageBox MB_OK "GoalfyMediaConverter 已成功卸载"
 SectionEnd
