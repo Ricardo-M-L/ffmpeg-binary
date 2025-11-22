@@ -389,7 +389,7 @@ func (s *Server) handleConvertDownload(c *gin.Context) {
 	// 设置响应头
 	fileName := filepath.Base(convertTask.OutputPath)
 	c.Header("Content-Type", "video/mp4")
-	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, fileName))
+	c.Header("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, fileName))
 
 	// 流式传输文件
 	file, err := os.Open(convertTask.OutputPath)
