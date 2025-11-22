@@ -513,15 +513,10 @@
                 // 5. 轮询转换进度
                 await pollConvertProgress(mode, taskId, 60, 95);
 
-                // 6. 下载并显示结果
+                // 6. 设置视频源为下载接口 URL (支持流式播放和进度条拖动)
                 updateProgress(mode, 95, '正在加载预览...');
-                const downloadRes = await fetch(`${API_BASE}/convert/download/${taskId}`);
-                if (!downloadRes.ok) throw new Error('下载文件失败');
-
-                const blob = await downloadRes.blob();
-                const url = URL.createObjectURL(blob);
-
-                document.getElementById(`${mode}Video`).src = url;
+                const videoUrl = `${API_BASE}/convert/download/${taskId}`;
+                document.getElementById(`${mode}Video`).src = videoUrl;
 
                 // 显示结果信息
                 const resultInfo = document.getElementById(`${mode}ResultInfo`);
@@ -624,15 +619,10 @@
                 // 5. 轮询转换进度
                 await pollConvertProgress(mode, taskId, 55, 95);
 
-                // 6. 下载并显示结果
+                // 6. 设置视频源为下载接口 URL (支持流式播放和进度条拖动)
                 updateProgress(mode, 95, '正在加载预览...');
-                const downloadRes = await fetch(`${API_BASE}/convert/download/${taskId}`);
-                if (!downloadRes.ok) throw new Error('下载文件失败');
-
-                const blob = await downloadRes.blob();
-                const url = URL.createObjectURL(blob);
-
-                document.getElementById(`${mode}Video`).src = url;
+                const videoUrl = `${API_BASE}/convert/download/${taskId}`;
+                document.getElementById(`${mode}Video`).src = videoUrl;
 
                 // 显示结果信息
                 const resultInfo = document.getElementById(`${mode}ResultInfo`);

@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -356,7 +355,7 @@ func (s *Server) handleConvertList(c *gin.Context) {
 	})
 }
 
-// handleConvertDownload 下载转换后的文件
+// handleConvertDownload 下载转换后的文件 (支持 Range 请求)
 // GET /api/convert/download/:taskId
 func (s *Server) handleConvertDownload(c *gin.Context) {
 	taskID := c.Param("taskId")
@@ -386,23 +385,8 @@ func (s *Server) handleConvertDownload(c *gin.Context) {
 		return
 	}
 
-	// 设置响应头
-	fileName := filepath.Base(convertTask.OutputPath)
-	c.Header("Content-Type", "video/mp4")
-	c.Header("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, fileName))
-
-	// 流式传输文件
-	file, err := os.Open(convertTask.OutputPath)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "打开文件失败",
-		})
-		return
-	}
-	defer file.Close()
-
-	io.Copy(c.Writer, file)
+	// 使用 Gin 的 File 方法,自动支持 Range 请求
+	c.File(convertTask.OutputPath)
 }
 
 // ==================== 进度查询模块 ====================
