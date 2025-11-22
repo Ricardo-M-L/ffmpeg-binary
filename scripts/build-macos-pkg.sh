@@ -321,29 +321,32 @@ cat > "$DIST_DIR/resources/conclusion.html" << 'CONCLUSION'
 <head>
     <meta charset="UTF-8">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 20px; }
-        h1 { color: #4CAF50; }
-        .info {
-            background: #2d2d2d;
-            color: #ffffff;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 10px 0;
-            border: 1px solid #4a4a4a;
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            padding: 20px;
         }
-        .info h3 {
-            color: #ffffff;
-            margin-top: 0;
+        h1 { color: #4CAF50; }
+        h3 {
+            margin-top: 20px;
+            margin-bottom: 10px;
         }
         .info strong {
-            color: #ffd700;
+            color: #0066cc;
+            font-weight: 600;
         }
-        code {
-            background: #1a1a1a;
-            color: #00ff00;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: Monaco, Consolas, monospace;
+        ul {
+            margin: 10px 0;
+            padding-left: 25px;
+        }
+        li {
+            margin: 5px 0;
+        }
+
+        /* 深色模式适配 */
+        @media (prefers-color-scheme: dark) {
+            .info strong {
+                color: #4da6ff;
+            }
         }
     </style>
 </head>
