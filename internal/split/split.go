@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"goalfy-mediaconverter/internal/gpu"
 )
 
 // TimeInterval 时间区间
@@ -51,13 +53,27 @@ type SplitResponse struct {
 type Splitter struct {
 	ffmpegPath string
 	outputDir  string
+	gpuConfig  *gpu.Config
 }
 
 // New 创建切割器
 func New(ffmpegPath, outputDir string) *Splitter {
+	// 自动检测 GPU 加速
+	detector := gpu.NewDetector(ffmpegPath)
+	gpuConfig := detector.DetectGPU()
+
+	// 测试 GPU 配置
+	if gpuConfig.Enabled {
+		if err := gpuConfig.Test(ffmpegPath); err != nil {
+			log.Printf("⚠️  GPU 测试失败: %v, 将使用 CPU 编码", err)
+			gpuConfig.Enabled = false
+		}
+	}
+
 	return &Splitter{
 		ffmpegPath: ffmpegPath,
 		outputDir:  outputDir,
+		gpuConfig:  gpuConfig,
 	}
 }
 
@@ -111,21 +127,69 @@ func calculateRetainedSegments(videoDuration float64, deleteIntervals []TimeInte
 
 // splitSegment 切割单个视频片段
 func (s *Splitter) splitSegment(inputPath, outputPath string, startTime, duration float64) error {
-	// 构建FFmpeg命令
-	// 使用重新编码以获得精确的切割(不使用 -c copy)
-	// ffmpeg -ss 开始时间 -i input.mp4 -t 时长 -c:v libx264 -c:a aac output.mp4
-	args := []string{
-		"-ss", fmt.Sprintf("%.3f", startTime), // -ss 放在 -i 之前,更快速定位
-		"-i", inputPath,
-		"-t", fmt.Sprintf("%.3f", duration),
-		"-c:v", "libx264", // 重新编码视频以获得精确切割
-		"-c:a", "aac", // 重新编码音频
-		"-preset", "ultrafast", // 使用最快编码速度
-		"-crf", "23", // 质量控制(18-28,越小质量越好)
-		"-f", "mp4",
-		"-movflags", "+faststart", // 优化流媒体播放
-		"-y", // 覆盖输出文件
-		outputPath,
+	// 使用 GPU 配置构建完整的 FFmpeg 参数
+	// 注意: 对于 split 操作,-ss 需要特殊处理
+	var args []string
+
+	if s.gpuConfig.Enabled {
+		// GPU 加速模式
+		log.Printf("🎮 使用 %s GPU 加速切割", s.gpuConfig.AccelType)
+
+		// 添加硬件加速参数
+		args = append(args, s.gpuConfig.ExtraArgs...)
+
+		// 添加 -ss 定位参数(在 -i 之前以获得更快的定位)
+		args = append(args, "-ss", fmt.Sprintf("%.3f", startTime))
+
+		// 如果有硬件解码器,添加解码参数
+		if s.gpuConfig.DecodeCodec != "" {
+			args = append(args, "-c:v", s.gpuConfig.DecodeCodec)
+		}
+
+		// 输入文件
+		args = append(args, "-i", inputPath)
+
+		// 添加输出参数,并替换编码器
+		args = append(args, "-t", fmt.Sprintf("%.3f", duration))
+		args = append(args, "-c:v", s.gpuConfig.EncodeCodec)
+		args = append(args, "-c:a", "aac")
+
+		// 根据 GPU 类型添加特定的质量参数
+		switch s.gpuConfig.AccelType {
+		case gpu.AccelNVIDIA:
+			args = append(args, "-preset", "p4", "-cq", "23")
+		case gpu.AccelAMD:
+			args = append(args, "-rc", "cqp", "-qp", "23")
+		case gpu.AccelIntel:
+			args = append(args, "-preset", "medium", "-global_quality", "23")
+		case gpu.AccelVideoToolbox:
+			// VideoToolbox 优化参数 - 使用码率控制保持文件大小
+			args = append(args,
+				"-b:v", "2M", // 目标码率 2Mbps (根据原视频码率调整)
+				"-maxrate", "3M", // 最大码率 3Mbps
+				"-bufsize", "6M", // 缓冲区大小
+				"-realtime", "1", // 实时编码模式,优先速度
+				"-allow_sw", "1", // 允许软件回退
+			)
+		}
+
+		args = append(args, "-f", "mp4", "-movflags", "+faststart", "-y", outputPath)
+	} else {
+		// CPU 模式(原始逻辑)
+		log.Println("💻 使用 CPU 编码切割")
+		args = []string{
+			"-ss", fmt.Sprintf("%.3f", startTime),
+			"-i", inputPath,
+			"-t", fmt.Sprintf("%.3f", duration),
+			"-c:v", "libx264",
+			"-c:a", "aac",
+			"-preset", "ultrafast",
+			"-crf", "23",
+			"-f", "mp4",
+			"-movflags", "+faststart",
+			"-y",
+			outputPath,
+		}
 	}
 
 	log.Printf("🎬 FFmpeg 命令: %s %s", s.ffmpegPath, strings.Join(args, " "))
@@ -134,7 +198,35 @@ func (s *Splitter) splitSegment(inputPath, outputPath string, startTime, duratio
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
+	err := cmd.Run()
+
+	// 如果 GPU 失败且启用了回退,尝试 CPU 编码
+	if err != nil && s.gpuConfig.Enabled && s.gpuConfig.FallbackCPU {
+		log.Printf("⚠️  GPU 编码失败: %v", err)
+		log.Println("🔄 尝试使用 CPU 编码...")
+
+		// CPU 回退
+		cpuArgs := []string{
+			"-ss", fmt.Sprintf("%.3f", startTime),
+			"-i", inputPath,
+			"-t", fmt.Sprintf("%.3f", duration),
+			"-c:v", "libx264",
+			"-c:a", "aac",
+			"-preset", "ultrafast",
+			"-crf", "23",
+			"-f", "mp4",
+			"-movflags", "+faststart",
+			"-y",
+			outputPath,
+		}
+
+		cmd = exec.Command(s.ffmpegPath, cpuArgs...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err = cmd.Run()
+	}
+
+	if err != nil {
 		return fmt.Errorf("FFmpeg 执行失败: %v", err)
 	}
 

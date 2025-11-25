@@ -457,28 +457,34 @@ window.location.href = `${API_BASE}/convert/download/${taskId}`;
 
 服务运行时会自动创建以下目录:
 
+**macOS/Linux:**
 ```bash
 ~/.goalfy-mediaconverter/
 ├── data/      # 合并后的文件
 ├── temp/      # 临时切片文件
-├── output/    # 转换后的输出文件
-└── config.json # 配置文件
+└── output/    # 转换后的输出文件
 ```
 
-### 配置文件
-
-配置文件位置: `~/.goalfy-mediaconverter/config.json`
-
-```json
-{
-  "port": 28888,
-  "host": "127.0.0.1",
-  "data_dir": "~/.goalfy-mediaconverter/data",
-  "temp_dir": "~/.goalfy-mediaconverter/temp",
-  "output_dir": "~/.goalfy-mediaconverter/output",
-  "ffmpeg_path": "/usr/local/bin/ffmpeg"
-}
+**Windows:**
 ```
+C:\Program Files\GoalfyMediaConverter\
+├── data\      # 合并后的文件
+├── temp\      # 临时切片文件
+├── output\    # 转换后的输出文件
+└── logs\      # 日志文件目录
+    └── service.log  # 服务运行日志
+```
+
+### 日志文件
+
+**macOS:**
+- 日志位置: `~/Library/Logs/goalfy-mediaconverter.log`
+- 实时查看: `tail -f ~/Library/Logs/goalfy-mediaconverter.log`
+
+**Windows:**
+- 日志位置: `C:\Program Files\GoalfyMediaConverter\logs\service.log`
+- 或安装目录下的 `logs\service.log`
+- 日志包含所有服务启动、转换任务、错误信息等详细记录
 
 ---
 

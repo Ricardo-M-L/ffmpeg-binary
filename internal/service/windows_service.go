@@ -9,6 +9,7 @@ import (
 	"goalfy-mediaconverter/internal/server"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"golang.org/x/sys/windows/svc"
@@ -25,8 +26,9 @@ const (
 
 // WindowsService 实现 Windows 服务接口
 type WindowsService struct {
-	server *server.Server
-	cfg    *config.Config
+	server  *server.Server
+	cfg     *config.Config
+	logFile *os.File // 保持日志文件句柄不被关闭
 }
 
 // Execute 实现 svc.Handler 接口
@@ -40,6 +42,16 @@ func (ws *WindowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 		log.Printf("加载配置失败: %v", err)
 		changes <- svc.Status{State: svc.Stopped}
 		return false, 1
+	}
+
+	// 设置日志文件输出
+	logFile, err := setupLogFile(cfg)
+	if err != nil {
+		log.Printf("设置日志文件失败: %v", err)
+		// 继续运行,使用默认日志输出
+	} else {
+		ws.logFile = logFile
+		defer ws.logFile.Close() // 服务停止时关闭日志文件
 	}
 
 	// 查找 FFmpeg
@@ -239,4 +251,43 @@ func StopService() error {
 	}
 
 	return nil
+}
+
+// setupLogFile 设置日志文件输出
+func setupLogFile(cfg *config.Config) (*os.File, error) {
+	// 确定日志目录(使用程序所在目录下的 logs 文件夹)
+	exePath, err := os.Executable()
+	if err != nil {
+		return nil, fmt.Errorf("获取可执行文件路径失败: %w", err)
+	}
+
+	exeDir := filepath.Dir(exePath)
+	logDir := filepath.Join(exeDir, "logs")
+
+	// 创建日志目录
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return nil, fmt.Errorf("创建日志目录失败: %w", err)
+	}
+
+	// 日志文件路径:logs/service.log
+	logFile := filepath.Join(logDir, "service.log")
+
+	// 打开或创建日志文件(追加模式,带同步写入标志)
+	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND|os.O_SYNC, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("打开日志文件失败: %w", err)
+	}
+
+	// 设置日志输出到文件(不输出到控制台,Windows 服务无控制台)
+	log.SetOutput(file)
+
+	// 设置日志格式
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
+	log.Printf("✅ 日志文件已设置: %s", logFile)
+	log.Printf("======================================")
+	log.Printf("  GoalfyMediaConverter 服务启动")
+	log.Printf("======================================")
+
+	return file, nil
 }

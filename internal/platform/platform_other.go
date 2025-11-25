@@ -43,6 +43,7 @@ func runAsConsole() {
 	cfg.FFmpegPath = ffmpegPath
 
 	// 检查命令行参数
+	devMode := false
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "install":
@@ -59,13 +60,25 @@ func runAsConsole() {
 			}
 			fmt.Println("自启动卸载成功")
 			return
+		case "dev":
+			// 开发模式:跳过自清理监控
+			devMode = true
+			log.Println("🔧 开发模式已启用,跳过自清理监控")
 		}
 	}
 
-	// 启动自清理监控(每10秒检查应用包是否存在)
-	cleanupWatcher := cleanup.NewWatcher()
-	cleanupWatcher.Start()
-	log.Println("✓ 自清理监控已启动")
+	// 检查环境变量 (用于判断是否为开发模式)
+	if os.Getenv("GOALFY_DEV_MODE") == "true" {
+		devMode = true
+		log.Println("🔧 开发模式已启用 (通过环境变量),跳过自清理监控")
+	}
+
+	// 只在非开发模式下启动自清理监控
+	if !devMode {
+		cleanupWatcher := cleanup.NewWatcher()
+		cleanupWatcher.Start()
+		log.Println("✓ 自清理监控已启动")
+	}
 
 	// 启动服务器
 	srv := server.New(cfg)
